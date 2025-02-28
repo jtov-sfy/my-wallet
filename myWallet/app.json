@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "My Wallet",
+    "slug": "my-wallet",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "my-wallet",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#002E14"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#002E14"
+      }
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
+} 
