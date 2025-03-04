@@ -8,13 +8,20 @@ import { useMemo } from 'react';
 export default function Page() {
   const { balance, monthlyBudget, expenses } = useWallet();
 
-  // Calculate total monthly expenses
-  const monthlyExpenses = useMemo(() => {
+  // Calculate total monthly expenses and income
+  const monthlyTotals = useMemo(() => {
     const now = new Date();
     const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     return expenses
       .filter(expense => new Date(expense.date) >= firstDayOfMonth)
-      .reduce((total, expense) => total + expense.amount, 0);
+      .reduce((totals, transaction) => {
+        if (transaction.type === 'income' || transaction.amount < 0) {
+          totals.income += Math.abs(transaction.amount);
+        } else {
+          totals.expenses += transaction.amount;
+        }
+        return totals;
+      }, { expenses: 0, income: 0 });
   }, [expenses]);
 
   // Get recent expenses
@@ -53,13 +60,28 @@ export default function Page() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         <ScrollView style={styles.scrollView}>
-          {/* Balance Card */}
-          <View style={styles.balanceCard}>
-            <Text style={styles.balanceLabel}>Monthly Expenses</Text>
-            <Text style={[styles.balanceAmount, { color: '#E91E63' }]}>${monthlyExpenses.toFixed(2)}</Text>
-            <View style={styles.balanceChange}>
-              <Ionicons name="calendar-outline" size={20} color="#666" />
-              <Text style={styles.balanceChangeText}>This Month's Total</Text>
+          {/* Monthly Totals Cards */}
+          <View style={styles.monthlyCards}>
+            <View style={[styles.balanceCard, styles.expenseCard, styles.halfCard]}>
+              <Text style={styles.balanceLabel}>Monthly Expenses</Text>
+              <Text style={[styles.balanceAmount, { color: '#E91E63', fontSize: 28 }]}>
+                -${monthlyTotals.expenses.toFixed(2)}
+              </Text>
+              <View style={styles.balanceChange}>
+                <Ionicons name="calendar-outline" size={20} color="#666" />
+                <Text style={styles.balanceChangeText}>This Month</Text>
+              </View>
+            </View>
+
+            <View style={[styles.balanceCard, styles.incomeCard, styles.halfCard]}>
+              <Text style={styles.balanceLabel}>Monthly Income</Text>
+              <Text style={[styles.balanceAmount, { color: '#4CAF50', fontSize: 28 }]}>
+                +${monthlyTotals.income.toFixed(2)}
+              </Text>
+              <View style={styles.balanceChange}>
+                <Ionicons name="calendar-outline" size={20} color="#666" />
+                <Text style={styles.balanceChangeText}>This Month</Text>
+              </View>
             </View>
           </View>
 
@@ -73,7 +95,7 @@ export default function Page() {
               <View style={[styles.actionIcon, { backgroundColor: '#E91E63' }]}>
                 <Ionicons name="add-circle" size={24} color="white" />
               </View>
-              <Text style={styles.actionText}>Add Expense</Text>
+              <Text style={styles.actionText}>Transaction</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
@@ -194,11 +216,16 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 100,
   },
+  monthlyCards: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 16,
+  },
   balanceCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 24,
-    marginBottom: 16,
+    padding: 16,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
@@ -207,6 +234,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3.84,
     elevation: 5,
+  },
+  expenseCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#E91E63',
+  },
+  incomeCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+  },
+  halfCard: {
+    flex: 1,
   },
   balanceLabel: {
     fontSize: 16,

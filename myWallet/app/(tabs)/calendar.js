@@ -208,7 +208,7 @@ export default function Calendar() {
     },
     topSection: {
       backgroundColor: theme.surface,
-      height: 300,
+      paddingBottom: 16,
     },
     header: {
       flexDirection: 'row',
@@ -301,19 +301,14 @@ export default function Calendar() {
       backgroundColor: theme.surface,
     },
     middleSection: {
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      height: 200,
-      top: 320,
-      paddingHorizontal: 16,
+      flex: 1,
       backgroundColor: 'transparent',
-      zIndex: 10,
+      paddingHorizontal: 16,
+      paddingTop: 16,
     },
     expensesContainer: {
+      flex: 1,
       backgroundColor: theme.background,
-      width: '100%',
-      height: '100%',
       borderRadius: 12,
       shadowColor: "#000",
       shadowOffset: {
