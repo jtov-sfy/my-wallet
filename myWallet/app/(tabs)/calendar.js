@@ -68,16 +68,61 @@ export default function Calendar() {
     return selectedDateExpenses.reduce((sum, expense) => sum + expense.amount, 0);
   }, [selectedDateExpenses]);
 
+  // Get transactions for selected date
+  const selectedDateTransactions = useMemo(() => {
+    if (!selectedDate || !expenses.length) {
+      console.log('No expenses or no selected date');
+      return [];
+    }
+    
+    // Set the selected date to noon for consistent comparison
+    const compareDate = new Date(selectedDate);
+    compareDate.setHours(12, 0, 0, 0);
+    console.log('Selected date for comparison:', compareDate.toISOString());
+    console.log('All expenses:', expenses);
+    
+    const filtered = expenses.filter(transaction => {
+      const transactionDate = new Date(transaction.date);
+      
+      // Compare only the date parts (year, month, day)
+      const isSameDate = 
+        transactionDate.getFullYear() === compareDate.getFullYear() &&
+        transactionDate.getMonth() === compareDate.getMonth() &&
+        transactionDate.getDate() === compareDate.getDate();
+      
+      console.log('Transaction:', {
+        date: transaction.date,
+        parsedDate: transactionDate.toISOString(),
+        selectedDate: compareDate.toISOString(),
+        isSameDate,
+        amount: transaction.amount,
+        category: transaction.category.name
+      });
+      
+      return isSameDate;
+    }).sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      return dateB - dateA;
+    });
+
+    console.log('Filtered transactions:', filtered);
+    return filtered;
+  }, [selectedDate, expenses]);
+
   // Check if a date has expenses
   const hasExpenses = (date) => {
-    if (!expenses.length) return false;
+    if (!expenses.length || !date) return false;
     
-    return expenses.some(expense => {
-      const expenseDate = expense.date instanceof Date ? expense.date : new Date(expense.date);
+    const compareDate = new Date(date);
+    compareDate.setHours(12, 0, 0, 0);
+    
+    return expenses.some(transaction => {
+      const transactionDate = new Date(transaction.date);
       return (
-        expenseDate.getFullYear() === date.getFullYear() &&
-        expenseDate.getMonth() === date.getMonth() &&
-        expenseDate.getDate() === date.getDate()
+        transactionDate.getFullYear() === compareDate.getFullYear() &&
+        transactionDate.getMonth() === compareDate.getMonth() &&
+        transactionDate.getDate() === compareDate.getDate()
       );
     });
   };
@@ -98,10 +143,11 @@ export default function Calendar() {
   // Handle day selection
   const handleDayPress = (date) => {
     if (date) {
-      console.log('Selected date:', date);
-      setSelectedDate(date);
-      console.log('Expenses:', expenses);
-      console.log('Filtered expenses:', selectedDateExpenses);
+      console.log('Selecting date:', date);
+      const newDate = new Date(date);
+      newDate.setHours(12, 0, 0, 0);
+      console.log('New selected date:', newDate.toISOString());
+      setSelectedDate(newDate);
     }
   };
 
@@ -118,6 +164,38 @@ export default function Calendar() {
     setSelectedDate(today);
     setSelectedMonth(today);
   };
+
+  // Calculate monthly totals
+  const monthlyTotals = useMemo(() => {
+    if (!expenses.length) return { expenses: 0, income: 0 };
+    
+    const currentMonth = selectedMonth.getMonth();
+    const currentYear = selectedMonth.getFullYear();
+    
+    return expenses.reduce((totals, transaction) => {
+      const transactionDate = new Date(transaction.date);
+      if (transactionDate.getMonth() === currentMonth && transactionDate.getFullYear() === currentYear) {
+        if (transaction.type === 'income' || transaction.amount < 0) {
+          totals.income += Math.abs(transaction.amount);
+        } else {
+          totals.expenses += transaction.amount;
+        }
+      }
+      return totals;
+    }, { expenses: 0, income: 0 });
+  }, [expenses, selectedMonth]);
+
+  // Calculate daily totals
+  const dailyTotals = useMemo(() => {
+    return selectedDateTransactions.reduce((totals, transaction) => {
+      if (transaction.type === 'income' || transaction.amount < 0) {
+        totals.income += Math.abs(transaction.amount);
+      } else {
+        totals.expenses += transaction.amount;
+      }
+      return totals;
+    }, { expenses: 0, income: 0 });
+  }, [selectedDateTransactions]);
 
   const styles = StyleSheet.create({
     safeArea: {
@@ -347,6 +425,38 @@ export default function Calendar() {
       padding: 20,
       backgroundColor: theme.surface,
     },
+    monthlyTotals: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      padding: 12,
+      backgroundColor: theme.surfaceVariant,
+      marginBottom: 8,
+    },
+    totalItem: {
+      alignItems: 'center',
+    },
+    totalLabel: {
+      fontSize: 12,
+      color: theme.textSecondary,
+      marginBottom: 4,
+    },
+    expenseTotal: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: theme.error,
+    },
+    incomeTotal: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: theme.primary,
+    },
+    transactionAmount: {
+      fontSize: 14,
+      fontWeight: '500',
+    },
+    incomeAmount: {
+      color: theme.primary,
+    },
   });
 
   return (
@@ -355,6 +465,17 @@ export default function Calendar() {
         <View style={styles.topSection}>
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Calendar</Text>
+          </View>
+
+          <View style={styles.monthlyTotals}>
+            <View style={styles.totalItem}>
+              <Text style={styles.totalLabel}>Monthly Expenses</Text>
+              <Text style={styles.expenseTotal}>-{formatCurrency(monthlyTotals.expenses)}</Text>
+            </View>
+            <View style={styles.totalItem}>
+              <Text style={styles.totalLabel}>Monthly Income</Text>
+              <Text style={styles.incomeTotal}>+{formatCurrency(monthlyTotals.income)}</Text>
+            </View>
           </View>
 
           <View style={styles.calendarHeader}>
@@ -431,33 +552,39 @@ export default function Calendar() {
               <Text style={styles.expensesTitle}>
                 {selectedDate.toLocaleDateString('default', { month: 'long', day: 'numeric', year: 'numeric' })}
               </Text>
-              <Text style={styles.expensesTotal}>
-                Total: {formatCurrency(totalExpenses)}
-              </Text>
+              <View style={{ flexDirection: 'row', gap: 16 }}>
+                <Text style={styles.expenseTotal}>-{formatCurrency(dailyTotals.expenses)}</Text>
+                <Text style={styles.incomeTotal}>+{formatCurrency(dailyTotals.income)}</Text>
+              </View>
             </View>
 
             <ScrollView 
               style={styles.expensesList}
               contentContainerStyle={{ flexGrow: 1 }}
             >
-              {selectedDateExpenses.length === 0 ? (
-                <Text style={styles.noExpenses}>No expenses for this date</Text>
+              {selectedDateTransactions.length === 0 ? (
+                <Text style={styles.noExpenses}>No transactions for this date</Text>
               ) : (
-                selectedDateExpenses.map((expense) => (
-                  <View key={expense.id} style={styles.expenseItem}>
+                selectedDateTransactions.map((transaction) => (
+                  <View key={transaction.id} style={styles.expenseItem}>
                     <View style={styles.expenseLeft}>
-                      <View style={[styles.categoryIcon, { backgroundColor: expense.category.color }]}>
-                        <Ionicons name={expense.category.icon} size={20} color="white" />
+                      <View style={[styles.categoryIcon, { backgroundColor: transaction.category.color }]}>
+                        <Ionicons name={transaction.category.icon} size={20} color="white" />
                       </View>
                       <View style={styles.expenseInfo}>
-                        <Text style={styles.expenseCategory}>{expense.category.name}</Text>
-                        {expense.note && (
-                          <Text style={styles.expenseNote}>{expense.note}</Text>
+                        <Text style={styles.expenseCategory}>{transaction.category.name}</Text>
+                        {transaction.note && (
+                          <Text style={styles.expenseNote}>{transaction.note}</Text>
                         )}
-                        <Text style={styles.expenseTime}>{formatTime(expense.date)}</Text>
+                        <Text style={styles.expenseTime}>{formatTime(transaction.date)}</Text>
                       </View>
                     </View>
-                    <Text style={styles.expenseAmount}>-{formatCurrency(expense.amount)}</Text>
+                    <Text style={[
+                      styles.transactionAmount,
+                      transaction.type === 'income' ? styles.incomeAmount : styles.expenseAmount
+                    ]}>
+                      {transaction.type === 'income' ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount))}
+                    </Text>
                   </View>
                 ))
               )}

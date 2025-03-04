@@ -60,12 +60,15 @@ export function WalletProvider({ children }) {
   };
 
   const addExpense = (expense) => {
+    // Use the date from the expense object instead of creating a new date
     const newExpense = {
       ...expense,
       id: Date.now().toString(),
-      date: new Date(), // Store as Date object
+      // Ensure the date is a Date object if it's an ISO string
+      date: expense.date instanceof Date ? expense.date : new Date(expense.date)
     };
 
+    console.log('Adding expense with date:', newExpense.date);
     setExpenses(prevExpenses => [newExpense, ...prevExpenses]);
     setBalance(prevBalance => prevBalance - expense.amount);
     
