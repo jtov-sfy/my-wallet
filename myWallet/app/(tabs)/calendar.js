@@ -7,13 +7,19 @@ import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 
 export default function Calendar() {
-  const { expenses, deleteExpense, setExpenses } = useWallet();
+  const { expenses, deleteExpense } = useWallet();
   const { theme } = useTheme();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [refreshKey, setRefreshKey] = useState(0);
+  const [localExpenses, setLocalExpenses] = useState([]);
   const router = useRouter();
   const windowHeight = Dimensions.get('window').height;
+
+  // Initialize local expenses from context
+  useEffect(() => {
+    setLocalExpenses(expenses);
+  }, [expenses]);
 
   // Get days in month
   const daysInMonth = useMemo(() => {
@@ -41,13 +47,13 @@ export default function Calendar() {
 
   // Get expenses for selected date
   const selectedDateExpenses = useMemo(() => {
-    if (!selectedDate || !expenses.length) {
+    if (!selectedDate || !localExpenses.length) {
       console.log('No expenses or no selected date');
       return [];
     }
     
     console.log('Filtering expenses for date:', selectedDate);
-    const filtered = expenses.filter(expense => {
+    const filtered = localExpenses.filter(expense => {
       const expenseDate = expense.date instanceof Date ? expense.date : new Date(expense.date);
       const match = 
         expenseDate.getFullYear() === selectedDate.getFullYear() &&
@@ -62,7 +68,7 @@ export default function Calendar() {
     });
     console.log('Filtered expenses:', filtered);
     return filtered;
-  }, [selectedDate, expenses]);
+  }, [selectedDate, localExpenses]);
 
   // Calculate total expenses for selected date
   const totalExpenses = useMemo(() => {
@@ -73,9 +79,9 @@ export default function Calendar() {
   const selectedDateTransactions = useMemo(() => {
     console.log('Recalculating selectedDateTransactions');
     console.log('Selected date:', selectedDate);
-    console.log('Expenses length:', expenses.length);
+    console.log('Expenses length:', localExpenses.length);
     
-    if (!selectedDate || !expenses.length) {
+    if (!selectedDate || !localExpenses.length) {
       console.log('No expenses or no selected date');
       return [];
     }
@@ -84,7 +90,7 @@ export default function Calendar() {
     const compareDate = new Date(selectedDate);
     compareDate.setHours(12, 0, 0, 0);
     
-    const filtered = expenses.filter(transaction => {
+    const filtered = localExpenses.filter(transaction => {
       const transactionDate = new Date(transaction.date);
       transactionDate.setHours(12, 0, 0, 0);
       
@@ -102,16 +108,16 @@ export default function Calendar() {
 
     console.log('Filtered transactions:', filtered.length);
     return filtered;
-  }, [selectedDate, expenses]);
+  }, [selectedDate, localExpenses]);
 
   // Check if a date has expenses
   const hasExpenses = (date) => {
-    if (!expenses.length || !date) return false;
+    if (!localExpenses.length || !date) return false;
     
     const compareDate = new Date(date);
     compareDate.setHours(12, 0, 0, 0);
     
-    return expenses.some(transaction => {
+    return localExpenses.some(transaction => {
       const transactionDate = new Date(transaction.date);
       return (
         transactionDate.getFullYear() === compareDate.getFullYear() &&
@@ -123,7 +129,7 @@ export default function Calendar() {
 
   // Format currency
   const formatCurrency = (amount) => {
-    return `$${amount.toFixed(2)}`;
+    return `€${amount.toFixed(2)}`;
   };
 
   // Format time
@@ -165,10 +171,10 @@ export default function Calendar() {
   // Calculate monthly totals
   const monthlyTotals = useMemo(() => {
     console.log('Calculating monthly totals...');
-    console.log('Current expenses:', expenses.length);
+    console.log('Current expenses:', localExpenses.length);
     console.log('Selected month:', selectedMonth.toISOString());
     
-    if (!expenses.length) {
+    if (!localExpenses.length) {
       console.log('No expenses to calculate');
       return { expenses: 0, income: 0 };
     }
@@ -176,7 +182,7 @@ export default function Calendar() {
     const currentMonth = selectedMonth.getMonth();
     const currentYear = selectedMonth.getFullYear();
     
-    const totals = expenses.reduce((acc, transaction) => {
+    const totals = localExpenses.reduce((acc, transaction) => {
       try {
         const transactionDate = new Date(transaction.date);
         if (transactionDate.getMonth() === currentMonth && 
@@ -202,7 +208,7 @@ export default function Calendar() {
 
     console.log('Final monthly totals:', totals);
     return totals;
-  }, [expenses, selectedMonth]);
+  }, [localExpenses, selectedMonth]);
 
   // Calculate daily totals
   const dailyTotals = useMemo(() => {
@@ -216,74 +222,74 @@ export default function Calendar() {
     }, { expenses: 0, income: 0 });
   }, [selectedDateTransactions]);
 
-  // Handle delete transaction
-  const handleDeleteTransaction = useCallback(async (transaction) => {
+  // Handle direct delete without confirmation
+  const handleDirectDelete = useCallback((transactionId) => {
+    console.log('Direct delete called for ID:', transactionId);
+    
+    if (!transactionId) {
+      console.error('No transaction ID provided for deletion');
+      return;
+    }
+    
     try {
-      console.log('Delete button pressed for transaction:', JSON.stringify(transaction, null, 2));
-      
-      if (!transaction?.id) {
-        console.error('Invalid transaction:', transaction);
+      // Find the transaction to delete
+      const transaction = localExpenses.find(t => t.id === transactionId);
+      if (!transaction) {
+        console.error('Transaction not found:', transactionId);
         return;
       }
-
-      Alert.alert(
-        'Delete Transaction',
-        `Are you sure you want to delete this ${transaction.type} of ${formatCurrency(Math.abs(transaction.amount))}?`,
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: async () => {
-              try {
-                console.log('Starting delete operation...');
-                
-                // Try to delete from storage first
-                const result = await deleteExpense(transaction.id);
-                console.log('Delete operation result:', result);
-                
-                if (result) {
-                  // If delete was successful, update local state
-                  const updatedTransactions = expenses.filter(t => t.id !== transaction.id);
-                  setExpenses(updatedTransactions);
-                  
-                  // Force refresh of the view
-                  setRefreshKey(prev => prev + 1);
-                  
-                  // Show success message
-                  Alert.alert('Success', 'Transaction deleted successfully');
-                } else {
-                  Alert.alert('Error', 'Failed to delete transaction. Please try again.');
-                }
-              } catch (error) {
-                console.error('Error in delete operation:', error);
-                Alert.alert('Error', 'An error occurred while deleting the transaction.');
-              }
-            }
-          }
-        ]
-      );
+      
+      console.log('Found transaction to delete:', transaction);
+      
+      // Update local state immediately
+      console.log('Updating local state...');
+      const newExpenses = localExpenses.filter(t => t.id !== transactionId);
+      setLocalExpenses(newExpenses);
+      
+      // Force refresh
+      setRefreshKey(prev => prev + 1);
+      
+      // Call delete function in context
+      deleteExpense(transactionId)
+        .then(result => {
+          console.log('Delete operation result:', result);
+        })
+        .catch(err => {
+          console.error('Error in delete operation:', err);
+        });
     } catch (error) {
-      console.error('Error in handleDeleteTransaction:', error);
-      Alert.alert('Error', 'An unexpected error occurred.');
+      console.error('Unexpected error in handleDirectDelete:', error);
     }
-  }, [expenses, deleteExpense, setExpenses]);
+  }, [localExpenses, deleteExpense]);
 
-  // Update useEffect to only handle expenses changes, not selectedDate
+  // Update useEffect to handle refresh
   useEffect(() => {
-    console.log('Expenses changed, refreshing view...');
+    console.log('LocalExpenses or date changed, refreshing view...');
     setRefreshKey(prev => prev + 1);
-  }, [expenses]); // Remove selectedDate from dependencies
+  }, [localExpenses, selectedDate]);
 
-  // Add new useEffect to handle selectedDate changes
-  useEffect(() => {
-    console.log('Selected date changed:', selectedDate);
-    // Force refresh when date changes
-    setRefreshKey(prev => prev + 1);
-  }, [selectedDate]);
+  // Get filtered transactions for the selected date
+  const getFilteredTransactions = useCallback(() => {
+    if (!selectedDate || !localExpenses.length) return [];
+    
+    const compareDate = new Date(selectedDate);
+    compareDate.setHours(12, 0, 0, 0);
+    
+    return localExpenses.filter(transaction => {
+      const transactionDate = new Date(transaction.date);
+      transactionDate.setHours(12, 0, 0, 0);
+      
+      return (
+        transactionDate.getFullYear() === compareDate.getFullYear() &&
+        transactionDate.getMonth() === compareDate.getMonth() &&
+        transactionDate.getDate() === compareDate.getDate()
+      );
+    }).sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      return dateB - dateA;
+    });
+  }, [selectedDate, localExpenses]);
 
   const styles = StyleSheet.create({
     safeArea: {
@@ -557,16 +563,18 @@ export default function Calendar() {
       gap: 12,
     },
     deleteButton: {
-      width: 40,
-      height: 40,
-      marginLeft: 8,
+      width: 50,
+      height: 50,
+      marginLeft: 10,
+      padding: 5,
     },
     deleteButtonInner: {
       flex: 1,
       backgroundColor: theme.error,
-      borderRadius: 20,
+      borderRadius: 25,
       alignItems: 'center',
       justifyContent: 'center',
+      padding: 8,
     },
   });
 
@@ -673,10 +681,10 @@ export default function Calendar() {
               style={styles.expensesList}
               contentContainerStyle={{ flexGrow: 1 }}
             >
-              {selectedDateTransactions.length === 0 ? (
+              {getFilteredTransactions().length === 0 ? (
                 <Text style={styles.noExpenses}>No transactions for this date</Text>
               ) : (
-                selectedDateTransactions.map((transaction) => (
+                getFilteredTransactions().map((transaction) => (
                   <View
                     key={transaction.id}
                     style={styles.expenseItem}
@@ -700,18 +708,25 @@ export default function Calendar() {
                       ]}>
                         {`${transaction.type === 'income' ? '+' : '-'}${formatCurrency(Math.abs(transaction.amount))}`}
                       </Text>
+                      
+                      {/* Delete Button */}
                       <TouchableOpacity
-                        onPress={() => handleDeleteTransaction(transaction)}
-                        style={styles.deleteButton}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        onPress={() => {
+                          console.log('Delete button pressed for:', transaction.id);
+                          handleDirectDelete(transaction.id);
+                        }}
+                        activeOpacity={0.6}
+                        style={{
+                          width: 50,
+                          height: 50,
+                          backgroundColor: theme.error,
+                          borderRadius: 25,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          marginLeft: 10,
+                        }}
                       >
-                        <View style={styles.deleteButtonInner}>
-                          <Ionicons 
-                            name="trash-outline" 
-                            size={20} 
-                            color="white"
-                          />
-                        </View>
+                        <Ionicons name="trash-outline" size={24} color="white" />
                       </TouchableOpacity>
                     </View>
                   </View>

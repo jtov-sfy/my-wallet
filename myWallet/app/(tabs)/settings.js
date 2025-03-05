@@ -101,7 +101,7 @@ export default function Settings() {
               </View>
               <View>
                 <Text style={styles.settingTitle}>Monthly Budget</Text>
-                <Text style={styles.settingValue}>${monthlyBudget.total.toFixed(2)}</Text>
+                <Text style={styles.settingValue}>€{monthlyBudget.total.toFixed(2)}</Text>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />

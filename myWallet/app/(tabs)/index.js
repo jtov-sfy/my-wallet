@@ -65,7 +65,7 @@ export default function Page() {
             <View style={[styles.balanceCard, styles.expenseCard, styles.halfCard]}>
               <Text style={styles.balanceLabel}>Monthly Expenses</Text>
               <Text style={[styles.balanceAmount, { color: '#E91E63', fontSize: 28 }]}>
-                -${monthlyTotals.expenses.toFixed(2)}
+                -{monthlyTotals.expenses.toFixed(2)}€
               </Text>
               <View style={styles.balanceChange}>
                 <Ionicons name="calendar-outline" size={20} color="#666" />
@@ -76,7 +76,7 @@ export default function Page() {
             <View style={[styles.balanceCard, styles.incomeCard, styles.halfCard]}>
               <Text style={styles.balanceLabel}>Monthly Income</Text>
               <Text style={[styles.balanceAmount, { color: '#4CAF50', fontSize: 28 }]}>
-                +${monthlyTotals.income.toFixed(2)}
+                +{monthlyTotals.income.toFixed(2)}€
               </Text>
               <View style={styles.balanceChange}>
                 <Ionicons name="calendar-outline" size={20} color="#666" />
@@ -145,17 +145,17 @@ export default function Page() {
               <View style={styles.budgetStats}>
                 <View style={styles.budgetStat}>
                   <Text style={styles.budgetStatLabel}>Spent</Text>
-                  <Text style={styles.budgetStatAmount}>${monthlyBudget.spent.toFixed(2)}</Text>
+                  <Text style={styles.budgetStatAmount}>€{monthlyBudget.spent.toFixed(2)}</Text>
                 </View>
                 <View style={styles.budgetStat}>
                   <Text style={styles.budgetStatLabel}>Remaining</Text>
                   <Text style={[styles.budgetStatAmount, { color: '#4CAF50' }]}>
-                    ${monthlyBudget.remaining.toFixed(2)}
+                    €{monthlyBudget.remaining.toFixed(2)}
                   </Text>
                 </View>
                 <View style={styles.budgetStat}>
                   <Text style={styles.budgetStatLabel}>Total Budget</Text>
-                  <Text style={styles.budgetStatAmount}>${monthlyBudget.total.toFixed(2)}</Text>
+                  <Text style={styles.budgetStatAmount}>€{monthlyBudget.total.toFixed(2)}</Text>
                 </View>
               </View>
             </View>
@@ -191,7 +191,7 @@ export default function Page() {
                       <Text style={styles.transactionDate}>{formatDate(expense.date)}</Text>
                     </View>
                   </View>
-                  <Text style={styles.transactionAmount}>-${expense.amount.toFixed(2)}</Text>
+                  <Text style={styles.transactionAmount}>-€{expense.amount.toFixed(2)}</Text>
                 </View>
               ))
             )}

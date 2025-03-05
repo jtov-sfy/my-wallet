@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const WalletContext = createContext();
@@ -129,70 +129,64 @@ export function WalletProvider({ children }) {
     }));
   };
 
-  const deleteExpense = async (expenseId) => {
+  const deleteExpense = useCallback(async (expenseId) => {
+    console.log('Starting deleteExpense for ID:', expenseId);
     try {
-      console.log('Starting delete operation for ID:', expenseId);
-      
       // Find the expense to delete
-      const expenseToDelete = expenses.find(e => e.id === expenseId);
-      console.log('Found expense to delete:', expenseToDelete);
-      
+      const expenseToDelete = expenses.find(exp => exp.id === expenseId);
       if (!expenseToDelete) {
         console.error('No expense found with ID:', expenseId);
         return false;
       }
+      console.log('Found expense to delete:', expenseToDelete);
 
-      // Calculate the updates
-      const updatedExpenses = expenses.filter(e => e.id !== expenseId);
-      const amount = Math.abs(expenseToDelete.amount);
-      
-      // Update balance based on transaction type
-      const newBalance = expenseToDelete.type === 'income' ? 
-        balance - amount : 
-        balance + amount;
-      
-      // Update budget if it's an expense
-      let newBudget = {...monthlyBudget};
-      if (expenseToDelete.type !== 'income') {
-        const newSpent = monthlyBudget.spent - amount;
-        newBudget = {
+      // Create new expenses array without the deleted expense
+      const updatedExpenses = expenses.filter(exp => exp.id !== expenseId);
+      console.log('Updated expenses:', updatedExpenses);
+
+      // Calculate new balance
+      const amountChange = expenseToDelete.type === 'expense' ? expenseToDelete.amount : -expenseToDelete.amount;
+      const newBalance = balance + amountChange;
+      console.log('New balance:', newBalance);
+
+      // Calculate new monthly budget if it's an expense
+      let newMonthlyBudget = monthlyBudget;
+      if (expenseToDelete.type === 'expense') {
+        newMonthlyBudget = {
           ...monthlyBudget,
-          spent: newSpent,
-          remaining: monthlyBudget.total - newSpent
+          spent: monthlyBudget.spent - expenseToDelete.amount,
+          remaining: monthlyBudget.total - (monthlyBudget.spent - expenseToDelete.amount)
         };
       }
+      console.log('New monthly budget:', newMonthlyBudget);
 
+      // Save all updates to storage
       try {
-        // Save all updates to AsyncStorage
-        const expensesToSave = updatedExpenses.map(expense => ({
-          ...expense,
-          date: expense.date instanceof Date ? expense.date.toISOString() : expense.date
-        }));
-
         await Promise.all([
-          AsyncStorage.setItem('wallet_expenses', JSON.stringify(expensesToSave)),
+          AsyncStorage.setItem('wallet_expenses', JSON.stringify(updatedExpenses)),
           AsyncStorage.setItem('wallet_balance', newBalance.toString()),
-          AsyncStorage.setItem('wallet_budget', JSON.stringify(newBudget))
+          AsyncStorage.setItem('wallet_budget', JSON.stringify(newMonthlyBudget))
         ]);
+        console.log('Successfully saved updates to storage');
 
         // Update state after successful storage update
         setExpenses(updatedExpenses);
         setBalance(newBalance);
-        if (expenseToDelete.type !== 'income') {
-          setMonthlyBudget(newBudget);
+        if (expenseToDelete.type === 'expense') {
+          setMonthlyBudget(newMonthlyBudget);
         }
 
-        console.log('Delete operation completed successfully');
+        console.log('Successfully updated state');
         return true;
-      } catch (error) {
-        console.error('Failed to save to AsyncStorage:', error);
+      } catch (storageError) {
+        console.error('Error saving to storage:', storageError);
         return false;
       }
     } catch (error) {
-      console.error('Error during delete operation:', error);
+      console.error('Error in deleteExpense:', error);
       return false;
     }
-  };
+  }, [expenses, balance, monthlyBudget]);
 
   const updateBalance = (amount) => {
     setBalance(prevBalance => prevBalance + amount);
@@ -205,7 +199,9 @@ export function WalletProvider({ children }) {
     addExpense,
     deleteExpense,
     updateBalance,
-    setMonthlyBudget
+    setMonthlyBudget,
+    setExpenses,
+    setBalance
   };
 
   return (

@@ -28,7 +28,7 @@ export default function Analytics() {
       <ScrollView style={styles.content}>
         <View style={styles.totalCard}>
           <Text style={styles.totalLabel}>Total Spending</Text>
-          <Text style={styles.totalAmount}>${totalSpending.toFixed(2)}</Text>
+          <Text style={styles.totalAmount}>€{totalSpending.toFixed(2)}</Text>
           <Text style={styles.periodLabel}>This Month</Text>
         </View>
 
@@ -60,7 +60,7 @@ export default function Analytics() {
                   </View>
                 </View>
                 <View>
-                  <Text style={styles.categoryAmount}>${category.amount.toFixed(2)}</Text>
+                  <Text style={styles.categoryAmount}>€{category.amount.toFixed(2)}</Text>
                   <Text style={styles.categoryPercentage}>{percentage}%</Text>
                 </View>
               </View>

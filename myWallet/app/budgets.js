@@ -69,7 +69,7 @@ export default function Budgets() {
                 
                 {editingCategory === category.id ? (
                   <View style={styles.editContainer}>
-                    <Text style={styles.currencySymbol}>$</Text>
+                    <Text style={styles.currencySymbol}>€</Text>
                     <TextInput
                       style={styles.editInput}
                       value={editingValue}
@@ -89,8 +89,9 @@ export default function Budgets() {
                     style={styles.budgetLimit}
                     onPress={() => handleEditBudget(category.id)}
                   >
-                    <Text style={styles.limitText}>
-                      ${budget.spent.toFixed(2)} / ${budget.limit.toFixed(2)}
+                    <Text style={styles.currencySymbol}>€</Text>
+                    <Text style={styles.budgetDetails}>
+                      €{budget.spent.toFixed(2)} / €{budget.limit.toFixed(2)}
                     </Text>
                     <Ionicons name="create-outline" size={20} color="#666" />
                   </TouchableOpacity>
@@ -181,7 +182,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  limitText: {
+  currencySymbol: {
+    fontSize: 16,
+    color: '#333',
+    marginRight: 4,
+  },
+  budgetDetails: {
     fontSize: 16,
     color: '#666',
     marginRight: 8,
@@ -213,11 +219,6 @@ const styles = StyleSheet.create({
   editContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  currencySymbol: {
-    fontSize: 16,
-    color: '#333',
-    marginRight: 4,
   },
   editInput: {
     fontSize: 16,

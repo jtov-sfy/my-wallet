@@ -317,7 +317,7 @@ export default function AddTransaction() {
           <View style={styles.amountContainer}>
             <Text style={styles.label}>Amount</Text>
             <View style={styles.amountInputContainer}>
-              <Text style={styles.currencySymbol}>$</Text>
+              <Text style={styles.currencySymbol}>€</Text>
               <TextInput
                 style={styles.amountInput}
                 value={amount}
