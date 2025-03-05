@@ -33,21 +33,18 @@ export default function AddTransaction() {
   const filteredCategories = CATEGORIES.filter(category => category.type === transactionType);
 
   const handleDateChange = (selectedDate) => {
+    let newDate;
+    
     if (Platform.OS === 'web') {
-      // For web, create a new date object from the selected date string
-      const newDate = new Date(selectedDate);
-      // Set the time to noon to avoid timezone issues
-      newDate.setHours(12, 0, 0, 0);
-      console.log('Web selected date:', newDate.toISOString());
-      setDate(newDate);
+      // Handle web date (which comes as a string)
+      newDate = new Date(selectedDate);
     } else {
-      // For mobile, handle the moment object from CalendarPicker
-      const newDate = selectedDate.toDate();
-      // Set the time to noon to avoid timezone issues
-      newDate.setHours(12, 0, 0, 0);
-      console.log('Mobile selected date:', newDate.toISOString());
-      setDate(newDate);
+      // Handle native date picker result
+      newDate = selectedDate || date;
     }
+    
+    // Set the date
+    setDate(newDate);
     setShowCalendar(false);
   };
 
@@ -74,7 +71,6 @@ export default function AddTransaction() {
     // Create a new date object from the selected date and set time to noon
     const transactionDate = new Date(date);
     transactionDate.setHours(12, 0, 0, 0);
-    console.log('Submitting transaction with date:', transactionDate.toISOString());
 
     const expense = {
       amount: transactionType === 'expense' ? numAmount : -numAmount,
@@ -85,7 +81,6 @@ export default function AddTransaction() {
       id: Date.now().toString(),
     };
 
-    console.log('Adding transaction:', expense);
     addExpense(expense);
 
     router.replace('/(tabs)');

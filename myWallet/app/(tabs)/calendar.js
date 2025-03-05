@@ -48,25 +48,21 @@ export default function Calendar() {
   // Get expenses for selected date
   const selectedDateExpenses = useMemo(() => {
     if (!selectedDate || !localExpenses.length) {
-      console.log('No expenses or no selected date');
       return [];
     }
     
-    console.log('Filtering expenses for date:', selectedDate);
     const filtered = localExpenses.filter(expense => {
       const expenseDate = expense.date instanceof Date ? expense.date : new Date(expense.date);
       const match = 
         expenseDate.getFullYear() === selectedDate.getFullYear() &&
         expenseDate.getMonth() === selectedDate.getMonth() &&
         expenseDate.getDate() === selectedDate.getDate();
-      console.log('Expense:', expense, 'Match:', match);
       return match;
     }).sort((a, b) => {
       const dateA = a.date instanceof Date ? a.date : new Date(a.date);
       const dateB = b.date instanceof Date ? b.date : new Date(b.date);
       return dateB - dateA;
     });
-    console.log('Filtered expenses:', filtered);
     return filtered;
   }, [selectedDate, localExpenses]);
 
@@ -77,12 +73,7 @@ export default function Calendar() {
 
   // Get transactions for selected date
   const selectedDateTransactions = useMemo(() => {
-    console.log('Recalculating selectedDateTransactions');
-    console.log('Selected date:', selectedDate);
-    console.log('Expenses length:', localExpenses.length);
-    
     if (!selectedDate || !localExpenses.length) {
-      console.log('No expenses or no selected date');
       return [];
     }
     
@@ -106,7 +97,6 @@ export default function Calendar() {
       return dateB - dateA;
     });
 
-    console.log('Filtered transactions:', filtered.length);
     return filtered;
   }, [selectedDate, localExpenses]);
 
@@ -143,11 +133,9 @@ export default function Calendar() {
   // Handle day selection
   const handleDayPress = useCallback((date) => {
     if (date) {
-      console.log('Day pressed:', date);
       const newDate = new Date(date);
       // Set the time to noon to avoid timezone issues
       newDate.setHours(12, 0, 0, 0);
-      console.log('Setting new date:', newDate.toISOString());
       setSelectedDate(newDate);
       // Force refresh the view
       setRefreshKey(prev => prev + 1);
@@ -170,12 +158,7 @@ export default function Calendar() {
 
   // Calculate monthly totals
   const monthlyTotals = useMemo(() => {
-    console.log('Calculating monthly totals...');
-    console.log('Current expenses:', localExpenses.length);
-    console.log('Selected month:', selectedMonth.toISOString());
-    
     if (!localExpenses.length) {
-      console.log('No expenses to calculate');
       return { expenses: 0, income: 0 };
     }
     
@@ -187,12 +170,6 @@ export default function Calendar() {
         const transactionDate = new Date(transaction.date);
         if (transactionDate.getMonth() === currentMonth && 
             transactionDate.getFullYear() === currentYear) {
-          console.log('Including transaction in totals:', {
-            id: transaction.id,
-            type: transaction.type,
-            amount: transaction.amount,
-            date: transactionDate.toISOString()
-          });
           
           if (transaction.type === 'income') {
             acc.income += Math.abs(Number(transaction.amount));
@@ -206,7 +183,6 @@ export default function Calendar() {
       return acc;
     }, { expenses: 0, income: 0 });
 
-    console.log('Final monthly totals:', totals);
     return totals;
   }, [localExpenses, selectedMonth]);
 
@@ -224,7 +200,7 @@ export default function Calendar() {
 
   // Handle direct delete without confirmation
   const handleDirectDelete = useCallback((transactionId) => {
-    console.log('Direct delete called for ID:', transactionId);
+    console.log('Delete operation started for ID:', transactionId);
     
     if (!transactionId) {
       console.error('No transaction ID provided for deletion');
@@ -239,10 +215,7 @@ export default function Calendar() {
         return;
       }
       
-      console.log('Found transaction to delete:', transaction);
-      
       // Update local state immediately
-      console.log('Updating local state...');
       const newExpenses = localExpenses.filter(t => t.id !== transactionId);
       setLocalExpenses(newExpenses);
       
@@ -252,7 +225,9 @@ export default function Calendar() {
       // Call delete function in context
       deleteExpense(transactionId)
         .then(result => {
-          console.log('Delete operation result:', result);
+          if (!result) {
+            console.error('Delete operation failed for ID:', transactionId);
+          }
         })
         .catch(err => {
           console.error('Error in delete operation:', err);
@@ -264,7 +239,6 @@ export default function Calendar() {
 
   // Update useEffect to handle refresh
   useEffect(() => {
-    console.log('LocalExpenses or date changed, refreshing view...');
     setRefreshKey(prev => prev + 1);
   }, [localExpenses, selectedDate]);
 
