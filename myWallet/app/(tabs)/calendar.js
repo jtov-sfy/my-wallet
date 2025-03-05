@@ -1,16 +1,17 @@
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Dimensions, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useWallet } from '../../context/WalletContext';
 import { useTheme } from '../../context/ThemeContext';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 
 export default function Calendar() {
-  const { expenses } = useWallet();
+  const { expenses, deleteExpense, setExpenses } = useWallet();
   const { theme } = useTheme();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedMonth, setSelectedMonth] = useState(new Date());
+  const [refreshKey, setRefreshKey] = useState(0);
   const router = useRouter();
   const windowHeight = Dimensions.get('window').height;
 
@@ -70,6 +71,10 @@ export default function Calendar() {
 
   // Get transactions for selected date
   const selectedDateTransactions = useMemo(() => {
+    console.log('Recalculating selectedDateTransactions');
+    console.log('Selected date:', selectedDate);
+    console.log('Expenses length:', expenses.length);
+    
     if (!selectedDate || !expenses.length) {
       console.log('No expenses or no selected date');
       return [];
@@ -78,26 +83,15 @@ export default function Calendar() {
     // Set the selected date to noon for consistent comparison
     const compareDate = new Date(selectedDate);
     compareDate.setHours(12, 0, 0, 0);
-    console.log('Selected date for comparison:', compareDate.toISOString());
-    console.log('All expenses:', expenses);
     
     const filtered = expenses.filter(transaction => {
       const transactionDate = new Date(transaction.date);
+      transactionDate.setHours(12, 0, 0, 0);
       
-      // Compare only the date parts (year, month, day)
       const isSameDate = 
         transactionDate.getFullYear() === compareDate.getFullYear() &&
         transactionDate.getMonth() === compareDate.getMonth() &&
         transactionDate.getDate() === compareDate.getDate();
-      
-      console.log('Transaction:', {
-        date: transaction.date,
-        parsedDate: transactionDate.toISOString(),
-        selectedDate: compareDate.toISOString(),
-        isSameDate,
-        amount: transaction.amount,
-        category: transaction.category.name
-      });
       
       return isSameDate;
     }).sort((a, b) => {
@@ -106,7 +100,7 @@ export default function Calendar() {
       return dateB - dateA;
     });
 
-    console.log('Filtered transactions:', filtered);
+    console.log('Filtered transactions:', filtered.length);
     return filtered;
   }, [selectedDate, expenses]);
 
@@ -141,15 +135,18 @@ export default function Calendar() {
   };
 
   // Handle day selection
-  const handleDayPress = (date) => {
+  const handleDayPress = useCallback((date) => {
     if (date) {
-      console.log('Selecting date:', date);
+      console.log('Day pressed:', date);
       const newDate = new Date(date);
+      // Set the time to noon to avoid timezone issues
       newDate.setHours(12, 0, 0, 0);
-      console.log('New selected date:', newDate.toISOString());
+      console.log('Setting new date:', newDate.toISOString());
       setSelectedDate(newDate);
+      // Force refresh the view
+      setRefreshKey(prev => prev + 1);
     }
-  };
+  }, []);
 
   // Navigate months
   const navigateMonth = (direction) => {
@@ -167,22 +164,44 @@ export default function Calendar() {
 
   // Calculate monthly totals
   const monthlyTotals = useMemo(() => {
-    if (!expenses.length) return { expenses: 0, income: 0 };
+    console.log('Calculating monthly totals...');
+    console.log('Current expenses:', expenses.length);
+    console.log('Selected month:', selectedMonth.toISOString());
+    
+    if (!expenses.length) {
+      console.log('No expenses to calculate');
+      return { expenses: 0, income: 0 };
+    }
     
     const currentMonth = selectedMonth.getMonth();
     const currentYear = selectedMonth.getFullYear();
     
-    return expenses.reduce((totals, transaction) => {
-      const transactionDate = new Date(transaction.date);
-      if (transactionDate.getMonth() === currentMonth && transactionDate.getFullYear() === currentYear) {
-        if (transaction.type === 'income' || transaction.amount < 0) {
-          totals.income += Math.abs(transaction.amount);
-        } else {
-          totals.expenses += transaction.amount;
+    const totals = expenses.reduce((acc, transaction) => {
+      try {
+        const transactionDate = new Date(transaction.date);
+        if (transactionDate.getMonth() === currentMonth && 
+            transactionDate.getFullYear() === currentYear) {
+          console.log('Including transaction in totals:', {
+            id: transaction.id,
+            type: transaction.type,
+            amount: transaction.amount,
+            date: transactionDate.toISOString()
+          });
+          
+          if (transaction.type === 'income') {
+            acc.income += Math.abs(Number(transaction.amount));
+          } else {
+            acc.expenses += Math.abs(Number(transaction.amount));
+          }
         }
+      } catch (error) {
+        console.error('Error processing transaction:', error);
       }
-      return totals;
+      return acc;
     }, { expenses: 0, income: 0 });
+
+    console.log('Final monthly totals:', totals);
+    return totals;
   }, [expenses, selectedMonth]);
 
   // Calculate daily totals
@@ -196,6 +215,75 @@ export default function Calendar() {
       return totals;
     }, { expenses: 0, income: 0 });
   }, [selectedDateTransactions]);
+
+  // Handle delete transaction
+  const handleDeleteTransaction = useCallback(async (transaction) => {
+    try {
+      console.log('Delete button pressed for transaction:', JSON.stringify(transaction, null, 2));
+      
+      if (!transaction?.id) {
+        console.error('Invalid transaction:', transaction);
+        return;
+      }
+
+      Alert.alert(
+        'Delete Transaction',
+        `Are you sure you want to delete this ${transaction.type} of ${formatCurrency(Math.abs(transaction.amount))}?`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                console.log('Starting delete operation...');
+                
+                // Try to delete from storage first
+                const result = await deleteExpense(transaction.id);
+                console.log('Delete operation result:', result);
+                
+                if (result) {
+                  // If delete was successful, update local state
+                  const updatedTransactions = expenses.filter(t => t.id !== transaction.id);
+                  setExpenses(updatedTransactions);
+                  
+                  // Force refresh of the view
+                  setRefreshKey(prev => prev + 1);
+                  
+                  // Show success message
+                  Alert.alert('Success', 'Transaction deleted successfully');
+                } else {
+                  Alert.alert('Error', 'Failed to delete transaction. Please try again.');
+                }
+              } catch (error) {
+                console.error('Error in delete operation:', error);
+                Alert.alert('Error', 'An error occurred while deleting the transaction.');
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error in handleDeleteTransaction:', error);
+      Alert.alert('Error', 'An unexpected error occurred.');
+    }
+  }, [expenses, deleteExpense, setExpenses]);
+
+  // Update useEffect to only handle expenses changes, not selectedDate
+  useEffect(() => {
+    console.log('Expenses changed, refreshing view...');
+    setRefreshKey(prev => prev + 1);
+  }, [expenses]); // Remove selectedDate from dependencies
+
+  // Add new useEffect to handle selectedDate changes
+  useEffect(() => {
+    console.log('Selected date changed:', selectedDate);
+    // Force refresh when date changes
+    setRefreshKey(prev => prev + 1);
+  }, [selectedDate]);
 
   const styles = StyleSheet.create({
     safeArea: {
@@ -269,12 +357,16 @@ export default function Calendar() {
     emptyDay: {
       backgroundColor: 'transparent',
     },
-    selectedDay: {
-      backgroundColor: theme.primary,
-      borderRadius: 20,
+    dayContainer: {
       width: 36,
       height: 36,
+      justifyContent: 'center',
+      alignItems: 'center',
       margin: 2,
+    },
+    selectedDay: {
+      backgroundColor: theme.primary,
+      borderRadius: 18,
     },
     dayText: {
       fontSize: 12,
@@ -310,15 +402,22 @@ export default function Calendar() {
       flex: 1,
       backgroundColor: theme.background,
       borderRadius: 12,
-      shadowColor: "#000",
-      shadowOffset: {
-        width: 0,
-        height: 2,
-      },
-      shadowOpacity: 0.25,
-      shadowRadius: 3.84,
       elevation: 5,
       overflow: 'hidden',
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOffset: {
+            width: 0,
+            height: 2,
+          },
+          shadowOpacity: 0.25,
+          shadowRadius: 3.84,
+        },
+        android: {
+          elevation: 5,
+        },
+      }),
     },
     expensesHeader: {
       flexDirection: 'row',
@@ -452,10 +551,27 @@ export default function Calendar() {
     incomeAmount: {
       color: theme.primary,
     },
+    expenseRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    deleteButton: {
+      width: 40,
+      height: 40,
+      marginLeft: 8,
+    },
+    deleteButtonInner: {
+      flex: 1,
+      backgroundColor: theme.error,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
   });
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} key={refreshKey}>
       <View style={styles.container}>
         <View style={styles.topSection}>
           <View style={styles.header}>
@@ -465,11 +581,11 @@ export default function Calendar() {
           <View style={styles.monthlyTotals}>
             <View style={styles.totalItem}>
               <Text style={styles.totalLabel}>Monthly Expenses</Text>
-              <Text style={styles.expenseTotal}>-{formatCurrency(monthlyTotals.expenses)}</Text>
+              <Text style={styles.expenseTotal}>{`-${formatCurrency(monthlyTotals.expenses)}`}</Text>
             </View>
             <View style={styles.totalItem}>
               <Text style={styles.totalLabel}>Monthly Income</Text>
-              <Text style={styles.incomeTotal}>+{formatCurrency(monthlyTotals.income)}</Text>
+              <Text style={styles.incomeTotal}>{`+${formatCurrency(monthlyTotals.income)}`}</Text>
             </View>
           </View>
 
@@ -506,18 +622,18 @@ export default function Calendar() {
                     styles.day,
                     !date && styles.emptyDay,
                   ]}
-                  onPress={() => handleDayPress(date)}
+                  onPress={() => date && handleDayPress(date)}
                   disabled={!date}
                   activeOpacity={0.7}
                 >
                   {date && (
                     <View style={[
+                      styles.dayContainer,
                       date && selectedDate && 
                       date.getDate() === selectedDate.getDate() && 
                       date.getMonth() === selectedDate.getMonth() && 
                       date.getFullYear() === selectedDate.getFullYear() && 
                       styles.selectedDay,
-                      { justifyContent: 'center', alignItems: 'center' }
                     ]}>
                       <Text style={[
                         styles.dayText,
@@ -548,8 +664,8 @@ export default function Calendar() {
                 {selectedDate.toLocaleDateString('default', { month: 'long', day: 'numeric', year: 'numeric' })}
               </Text>
               <View style={{ flexDirection: 'row', gap: 16 }}>
-                <Text style={styles.expenseTotal}>-{formatCurrency(dailyTotals.expenses)}</Text>
-                <Text style={styles.incomeTotal}>+{formatCurrency(dailyTotals.income)}</Text>
+                <Text style={styles.expenseTotal}>{`-${formatCurrency(dailyTotals.expenses)}`}</Text>
+                <Text style={styles.incomeTotal}>{`+${formatCurrency(dailyTotals.income)}`}</Text>
               </View>
             </View>
 
@@ -561,7 +677,10 @@ export default function Calendar() {
                 <Text style={styles.noExpenses}>No transactions for this date</Text>
               ) : (
                 selectedDateTransactions.map((transaction) => (
-                  <View key={transaction.id} style={styles.expenseItem}>
+                  <View
+                    key={transaction.id}
+                    style={styles.expenseItem}
+                  >
                     <View style={styles.expenseLeft}>
                       <View style={[styles.categoryIcon, { backgroundColor: transaction.category.color }]}>
                         <Ionicons name={transaction.category.icon} size={20} color="white" />
@@ -574,12 +693,27 @@ export default function Calendar() {
                         <Text style={styles.expenseTime}>{formatTime(transaction.date)}</Text>
                       </View>
                     </View>
-                    <Text style={[
-                      styles.transactionAmount,
-                      transaction.type === 'income' ? styles.incomeAmount : styles.expenseAmount
-                    ]}>
-                      {transaction.type === 'income' ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount))}
-                    </Text>
+                    <View style={styles.expenseRight}>
+                      <Text style={[
+                        styles.transactionAmount,
+                        transaction.type === 'income' ? styles.incomeAmount : styles.expenseAmount
+                      ]}>
+                        {`${transaction.type === 'income' ? '+' : '-'}${formatCurrency(Math.abs(transaction.amount))}`}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => handleDeleteTransaction(transaction)}
+                        style={styles.deleteButton}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <View style={styles.deleteButtonInner}>
+                          <Ionicons 
+                            name="trash-outline" 
+                            size={20} 
+                            color="white"
+                          />
+                        </View>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 ))
               )}

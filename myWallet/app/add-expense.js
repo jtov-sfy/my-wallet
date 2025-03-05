@@ -94,11 +94,11 @@ export default function AddTransaction() {
   const styles = StyleSheet.create({
     safeArea: {
       flex: 1,
-      backgroundColor: theme.background,
+      backgroundColor: theme.surface,
     },
     container: {
       flex: 1,
-      backgroundColor: theme.background,
+      backgroundColor: theme.surface,
     },
     header: {
       flexDirection: 'row',
@@ -120,60 +120,99 @@ export default function AddTransaction() {
       flex: 1,
       padding: 16,
     },
+    typeSelector: {
+      flexDirection: 'row',
+      backgroundColor: theme.surfaceVariant,
+      borderRadius: 25,
+      padding: 4,
+      marginBottom: 24,
+      alignSelf: 'center',
+    },
+    typeButton: {
+      paddingVertical: 8,
+      paddingHorizontal: 24,
+      borderRadius: 20,
+      minWidth: 100,
+    },
+    selectedTypeButton: {
+      backgroundColor: theme.primary,
+    },
+    typeButtonText: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: theme.textSecondary,
+      textAlign: 'center',
+    },
+    selectedTypeButtonText: {
+      color: '#fff',
+    },
     amountContainer: {
       marginBottom: 24,
-    },
-    label: {
-      fontSize: 16,
-      fontWeight: '600',
-      marginBottom: 8,
-      color: theme.text,
+      alignItems: 'center',
     },
     amountInputContainer: {
       flexDirection: 'row',
       alignItems: 'center',
-      borderBottomWidth: 2,
-      borderBottomColor: theme.primary,
-      paddingBottom: 8,
+      justifyContent: 'center',
+      backgroundColor: theme.surfaceVariant,
+      borderRadius: 16,
+      padding: 12,
+      maxWidth: 200,
+      width: '100%',
     },
     currencySymbol: {
-      fontSize: 24,
+      fontSize: 20,
+      fontWeight: '600',
       color: theme.text,
       marginRight: 8,
+      opacity: 0.7,
     },
     amountInput: {
-      flex: 1,
-      fontSize: 24,
+      fontSize: 20,
+      fontWeight: '600',
       color: theme.text,
+      padding: 0,
+      textAlign: 'center',
+      minWidth: 120,
+    },
+    label: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: theme.textSecondary,
+      marginBottom: 8,
+      textAlign: 'center',
     },
     dateContainer: {
       marginBottom: 24,
+      alignItems: 'center',
     },
     dateButton: {
       flexDirection: 'row',
       alignItems: 'center',
-      padding: 12,
+      justifyContent: 'center',
       backgroundColor: theme.surfaceVariant,
-      borderRadius: 8,
+      borderRadius: 16,
+      padding: 12,
+      maxWidth: 200,
+      width: '100%',
     },
     dateText: {
       fontSize: 16,
       color: theme.text,
       marginLeft: 8,
+      textAlign: 'center',
+      flex: 1,
     },
     categoriesGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
+      marginHorizontal: -8,
       marginBottom: 24,
     },
     categoryItem: {
-      width: '33.33%',
+      width: '25%',
       padding: 8,
       alignItems: 'center',
-    },
-    selectedCategory: {
-      backgroundColor: theme.surfaceVariant,
-      borderRadius: 8,
     },
     categoryIcon: {
       width: 48,
@@ -183,85 +222,49 @@ export default function AddTransaction() {
       justifyContent: 'center',
       marginBottom: 4,
     },
+    selectedCategory: {
+      opacity: 0.6,
+    },
     categoryName: {
       fontSize: 12,
       color: theme.text,
       textAlign: 'center',
     },
     noteInput: {
-      borderWidth: 1,
-      borderColor: theme.border,
-      borderRadius: 8,
+      backgroundColor: theme.surfaceVariant,
+      borderRadius: 12,
       padding: 12,
       height: 100,
       textAlignVertical: 'top',
-      marginBottom: 24,
+      color: theme.text,
     },
     submitButton: {
       backgroundColor: theme.primary,
+      borderRadius: 25,
       padding: 16,
-      borderRadius: 8,
-      margin: 16,
+      alignItems: 'center',
+      marginHorizontal: 16,
+      marginBottom: 16,
+      marginTop: 'auto',
+      ...Platform.select({
+        ios: {
+          shadowColor: theme.primary,
+          shadowOffset: {
+            width: 0,
+            height: 4,
+          },
+          shadowOpacity: 0.3,
+          shadowRadius: 4.65,
+        },
+        android: {
+          elevation: 8,
+        },
+      }),
     },
     submitButtonText: {
-      color: theme.onPrimary,
-      textAlign: 'center',
+      color: '#fff',
       fontSize: 16,
       fontWeight: '600',
-    },
-    modalContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      ...(Platform.OS === 'web' ? {
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-      } : {}),
-    },
-    calendarContainer: {
-      backgroundColor: theme.surface,
-      padding: 20,
-      borderRadius: 12,
-      width: Platform.OS === 'web' ? '400px' : '90%',
-      maxWidth: 400,
-      ...(Platform.OS === 'web' ? {
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-        position: 'relative',
-      } : {}),
-    },
-    closeButton: {
-      position: 'absolute',
-      top: 10,
-      right: 10,
-      zIndex: 1,
-      padding: 10,
-    },
-    typeSelector: {
-      flexDirection: 'row',
-      marginBottom: 24,
-      borderRadius: 8,
-      overflow: 'hidden',
-      backgroundColor: theme.surfaceVariant,
-    },
-    typeButton: {
-      flex: 1,
-      paddingVertical: 12,
-      alignItems: 'center',
-    },
-    selectedTypeButton: {
-      backgroundColor: theme.primary,
-    },
-    typeButtonText: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: theme.text,
-    },
-    selectedTypeButtonText: {
-      color: theme.onPrimary,
     },
   });
 
@@ -322,6 +325,7 @@ export default function AddTransaction() {
                 keyboardType="decimal-pad"
                 placeholder="0.00"
                 placeholderTextColor={theme.textSecondary}
+                textAlign="center"
               />
             </View>
           </View>
@@ -330,7 +334,7 @@ export default function AddTransaction() {
             <Text style={styles.label}>Date</Text>
             {Platform.OS === 'web' ? (
               <View style={styles.dateButton}>
-                <Ionicons name="calendar" size={24} color={theme.text} />
+                <Ionicons name="calendar" size={20} color={theme.text} style={{ opacity: 0.7 }} />
                 <input
                   type="date"
                   value={date.toISOString().split('T')[0]}
@@ -344,6 +348,8 @@ export default function AddTransaction() {
                     border: 'none',
                     outline: 'none',
                     cursor: 'pointer',
+                    textAlign: 'center',
+                    width: '120px',
                   }}
                 />
               </View>
@@ -352,7 +358,7 @@ export default function AddTransaction() {
                 style={styles.dateButton}
                 onPress={() => setShowCalendar(true)}
               >
-                <Ionicons name="calendar" size={24} color={theme.text} />
+                <Ionicons name="calendar" size={20} color={theme.text} style={{ opacity: 0.7 }} />
                 <Text style={styles.dateText}>{formatDate(date)}</Text>
               </TouchableOpacity>
             )}
