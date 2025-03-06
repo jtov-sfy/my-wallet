@@ -1,4 +1,4 @@
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert, Platform } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert, Platform, Modal, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useWallet } from '../context/WalletContext';
@@ -15,6 +15,10 @@ export default function Subscriptions() {
   const [localSubscriptions, setLocalSubscriptions] = useState([]);
   const [isOnline, setIsOnline] = useState(true);
   const [pendingOperations, setPendingOperations] = useState(0);
+  
+  // Delete modal state
+  const [isDeleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [subscriptionToDelete, setSubscriptionToDelete] = useState(null);
 
   // Check for offline status and pending operations
   useEffect(() => {
@@ -158,83 +162,69 @@ export default function Subscriptions() {
     
     // Look up the subscription by ID to display its name
     const subscription = localSubscriptions.find(s => s.id === subscriptionId);
-    const subscriptionName = subscription ? 
-                             (subscription.name || 'Unnamed Subscription') : 
-                             'this subscription';
+    if (!subscription) {
+      console.error('Subscription not found:', subscriptionId);
+      Alert.alert('Error', 'Cannot find this subscription in your list.');
+      return;
+    }
     
-    Alert.alert(
-      'Delete Subscription',
-      `Are you sure you want to delete "${subscriptionName}"?`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-          onPress: () => console.log('Delete subscription cancelled')
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            if (isLoading) {
-              console.log('Delete operation skipped - already loading');
-              return;
-            }
-            
-            console.log('User confirmed deletion of subscription:', subscriptionId);
-            setIsLoading(true);
-            
-            // Show a processing alert that cannot be cancelled
-            Alert.alert(
-              'Processing',
-              'Deleting subscription...',
-              [{ text: 'OK' }],
-              { cancelable: false }
-            );
-            
-            // Wait briefly to ensure the alert is displayed
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            try {
-              console.log('Calling deleteSubscription with ID:', subscriptionId);
-              const result = await deleteSubscription(subscriptionId);
-              console.log('Delete operation result:', result);
-              
-              if (result) {
-                // Success - manually update the UI right away
-                console.log('Subscription deleted successfully, updating UI');
-                setLocalSubscriptions(prev => prev.filter(sub => sub.id !== subscriptionId));
-                
-                Alert.alert(
-                  'Success',
-                  `"${subscriptionName}" has been deleted successfully.`,
-                  [{ text: 'OK' }]
-                );
-              } else {
-                // Failed - keep the current subscriptions
-                console.error('Failed to delete subscription:', subscriptionId);
-                Alert.alert(
-                  'Error',
-                  'Failed to delete subscription. Please try again.',
-                  [{ text: 'OK' }]
-                );
-              }
-            } catch (error) {
-              // Error handling
-              console.error('Exception when deleting subscription:', error);
-              Alert.alert(
-                'Error',
-                'An unexpected error occurred while deleting the subscription: ' + error.message,
-                [{ text: 'OK' }]
-              );
-            } finally {
-              console.log('Delete operation completed, setting isLoading to false');
-              setIsLoading(false);
-            }
-          }
-        }
-      ]
-    );
-  }, [deleteSubscription, isLoading, localSubscriptions]);
+    // Set the subscription to delete and show the modal
+    setSubscriptionToDelete(subscription);
+    setDeleteModalVisible(true);
+  }, [localSubscriptions]);
+  
+  // Confirm delete in the modal
+  const confirmDeleteSubscription = useCallback(async () => {
+    if (!subscriptionToDelete) return;
+    
+    // Get subscription name for messages
+    const subscriptionName = subscriptionToDelete.name || 'Unnamed Subscription';
+    
+    setIsLoading(true);
+    console.log('User confirmed deletion of subscription:', subscriptionToDelete.id);
+    
+    try {
+      console.log('Calling deleteSubscription with ID:', subscriptionToDelete.id);
+      const result = await deleteSubscription(subscriptionToDelete.id);
+      console.log('Delete operation result:', result);
+      
+      // Close the modal
+      setDeleteModalVisible(false);
+      
+      if (result) {
+        // Success - show confirmation
+        Alert.alert(
+          'Success',
+          `"${subscriptionName}" has been deleted successfully.`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        // Failed - show error
+        Alert.alert(
+          'Error',
+          'Failed to delete subscription. Please try again.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      // Error handling
+      console.error('Exception when deleting subscription:', error);
+      Alert.alert(
+        'Error',
+        'An unexpected error occurred while deleting the subscription: ' + error.message,
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, [subscriptionToDelete, deleteSubscription]);
+  
+  // Cancel delete in the modal
+  const cancelDeleteSubscription = useCallback(() => {
+    setDeleteModalVisible(false);
+    setSubscriptionToDelete(null);
+    console.log('Delete subscription cancelled by user');
+  }, []);
 
   // Handle clearing all subscriptions
   const handleClearAll = useCallback(() => {
@@ -406,6 +396,65 @@ export default function Subscriptions() {
             </>
           )}
         </ScrollView>
+        
+        {/* Subscription Delete Confirmation Modal */}
+        <Modal
+          visible={isDeleteModalVisible}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={cancelDeleteSubscription}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Delete Subscription</Text>
+              
+              {subscriptionToDelete && (
+                <>
+                  <View style={styles.subscriptionSummary}>
+                    <View style={[styles.categoryIcon, { backgroundColor: subscriptionToDelete.category?.color || '#888888' }]}>
+                      <Ionicons 
+                        name={subscriptionToDelete.category?.icon || 'calendar'} 
+                        size={24} 
+                        color="white" 
+                      />
+                    </View>
+                    <View style={styles.summaryDetails}>
+                      <Text style={styles.summaryName}>{subscriptionToDelete.name || 'Unnamed Subscription'}</Text>
+                      <Text style={styles.summaryAmount}>{formatCurrency(subscriptionToDelete.amount || 0)}</Text>
+                      <Text style={styles.summaryFrequency}>
+                        {subscriptionToDelete.billingCycle || 'monthly'} since {formatDate(subscriptionToDelete.startDate)}
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  <Text style={styles.warningText}>
+                    Are you sure you want to delete this subscription? This action cannot be undone.
+                  </Text>
+                  
+                  <View style={styles.modalButtons}>
+                    <TouchableOpacity
+                      style={[styles.modalButton, styles.cancelButton]}
+                      onPress={cancelDeleteSubscription}
+                      disabled={isLoading}
+                    >
+                      <Text style={styles.cancelButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={[styles.modalButton, styles.deleteButton]}
+                      onPress={confirmDeleteSubscription}
+                      disabled={isLoading}
+                    >
+                      <Text style={styles.deleteButtonText}>
+                        {isLoading ? 'Deleting...' : 'Delete Subscription'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -578,5 +627,99 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     marginLeft: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 24,
+    width: '100%',
+    maxWidth: 500,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    textAlign: 'center',
+    color: '#333',
+  },
+  subscriptionSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#f8f8f8',
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  summaryDetails: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  summaryName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  summaryAmount: {
+    fontSize: 18,
+    color: '#E91E63',
+    fontWeight: 'bold',
+    marginTop: 4,
+  },
+  summaryFrequency: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
+  },
+  warningText: {
+    fontSize: 14,
+    color: '#E91E63',
+    marginBottom: 16,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  modalButton: {
+    padding: 14,
+    borderRadius: 8,
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#f5f5f5',
+    marginRight: 8,
+  },
+  deleteButton: {
+    backgroundColor: '#E91E63',
+    marginLeft: 8,
+    opacity: function(props) {
+      return props.disabled ? 0.5 : 1;
+    },
+  },
+  cancelButtonText: {
+    color: '#333',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  deleteButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
 }); 

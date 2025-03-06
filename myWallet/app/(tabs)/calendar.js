@@ -1,4 +1,4 @@
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Dimensions, Alert, Platform } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Dimensions, Alert, Platform, Modal, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useWallet } from '../../context/WalletContext';
@@ -6,6 +6,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Picker } from '@react-native-picker/picker';
 
 export default function Calendar() {
   const { expenses, deleteExpense, addSubscription } = useWallet();
@@ -16,6 +17,13 @@ export default function Calendar() {
   const [localExpenses, setLocalExpenses] = useState([]);
   const router = useRouter();
   const windowHeight = Dimensions.get('window').height;
+  const [isModalVisible, setModalVisible] = useState(false);
+  const [subscriptionName, setSubscriptionName] = useState('');
+  const [subscriptionAmount, setSubscriptionAmount] = useState('');
+  const [subscriptionNote, setSubscriptionNote] = useState('');
+  const [billingCycle, setBillingCycle] = useState('monthly');
+  const [currentTransaction, setCurrentTransaction] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Initialize local expenses from context
   useEffect(() => {
@@ -281,119 +289,129 @@ export default function Calendar() {
       
       console.log('Found transaction:', JSON.stringify(transaction).slice(0, 300));
       
-      // Enhanced confirmation with more details
-      Alert.alert(
-        'Add Monthly Subscription',
-        `Are you sure you want to create a subscription for:\n\n` +
-        `${transaction.note || transaction.category?.name || 'Unnamed'}\n` +
-        `Amount: ${formatCurrency(transaction.amount)}\n` +
-        `Category: ${transaction.category?.name || 'Uncategorized'}\n\n` +
-        `This will be added to your monthly subscriptions and can be managed from the Subscriptions screen.`,
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel'
-          },
-          {
-            text: 'Add Subscription',
-            style: 'default',
-            onPress: async () => {
-              try {
-                console.log('User confirmed adding subscription, processing...');
-                
-                // Call the context function to add subscription using Firebase
-                if (typeof addSubscription !== 'function') {
-                  console.error('addSubscription is not a function');
-                  Alert.alert('Error', 'Could not add subscription due to an internal error');
-                  return;
-                }
-                
-                // Create a simplified clean subscription object from the transaction
-                const subscriptionData = {
-                  amount: transaction.amount || 0,
-                  category: transaction.category || {
-                    id: 'default',
-                    name: 'Subscription',
-                    icon: 'calendar',
-                    color: '#888888'
-                  },
-                  date: transaction.date,
-                  note: transaction.note || '',
-                  id: transaction.id
-                };
-                
-                console.log('Calling addSubscription with data:', 
-                            JSON.stringify(subscriptionData));
-                
-                // First display a temporary loading message  
-                Alert.alert(
-                  'Processing',
-                  'Adding subscription...',
-                  [{ text: 'OK' }],
-                  { cancelable: false }
-                );
-                
-                // Wait a short time to ensure the alert is displayed
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                
-                try {
-                  // Call the WalletContext function (this will use Firebase)
-                  const subscriptionId = await addSubscription(subscriptionData);
-                  
-                  console.log('addSubscription returned ID:', subscriptionId);
-                  
-                  // Show the result alert after the processing is done
-                  if (subscriptionId) {
-                    console.log('Subscription added successfully with ID:', subscriptionId);
-                    Alert.alert(
-                      'Success!',
-                      'Your subscription was successfully added.\n\nYou can view and manage it in the Subscriptions page.',
-                      [
-                        { 
-                          text: 'OK', 
-                          style: 'default' 
-                        },
-                        {
-                          text: 'Go to Subscriptions',
-                          style: 'default',
-                          onPress: () => router.push('/subscriptions')
-                        }
-                      ]
-                    );
-                  } else {
-                    console.error('Failed to add subscription - no ID returned');
-                    Alert.alert(
-                      'Error',
-                      'Failed to add subscription. Please try again.',
-                      [{ text: 'OK' }]
-                    );
-                  }
-                } catch (subscriptionError) {
-                  console.error('Exception in addSubscription call:', subscriptionError);
-                  Alert.alert(
-                    'Error',
-                    'Failed to save subscription: ' + subscriptionError.message,
-                    [{ text: 'OK' }]
-                  );
-                }
-                
-              } catch (error) {
-                console.error('Error in subscription creation process:', error);
-                Alert.alert(
-                  'Error',
-                  'Failed to save subscription. Please try again.',
-                  [{ text: 'OK' }]
-                );
-              }
-            }
-          }
-        ]
-      );
+      // Pre-fill modal form with transaction data
+      setSubscriptionName(transaction.note || transaction.category?.name || 'Monthly Subscription');
+      setSubscriptionAmount(transaction.amount.toString());
+      setSubscriptionNote(transaction.note || '');
+      setBillingCycle('monthly');
+      setCurrentTransaction(transaction);
+      
+      // Show the modal
+      setModalVisible(true);
+      
     } catch (error) {
       console.error('Error in handleAddToSubscriptions:', error);
-      Alert.alert('Error', 'Failed to add subscription');
+      Alert.alert('Error', 'Failed to prepare subscription form');
     }
-  }, [localExpenses, addSubscription, formatCurrency, router]);
+  }, [localExpenses]);
+  
+  // Handle confirming subscription creation
+  const handleConfirmSubscription = useCallback(async () => {
+    try {
+      if (!currentTransaction) {
+        console.error('No transaction selected for subscription');
+        return;
+      }
+      
+      setIsProcessing(true);
+      console.log('Creating subscription from transaction:', currentTransaction.id);
+      
+      // Validate inputs
+      const amount = parseFloat(subscriptionAmount);
+      if (isNaN(amount) || amount <= 0) {
+        Alert.alert('Invalid Amount', 'Please enter a valid amount greater than zero');
+        setIsProcessing(false);
+        return;
+      }
+      
+      if (!subscriptionName.trim()) {
+        Alert.alert('Missing Name', 'Please enter a name for this subscription');
+        setIsProcessing(false);
+        return;
+      }
+      
+      // Call the context function to add subscription using Firebase
+      if (typeof addSubscription !== 'function') {
+        console.error('addSubscription is not a function');
+        Alert.alert('Error', 'Could not add subscription due to an internal error');
+        setIsProcessing(false);
+        return;
+      }
+      
+      // Create subscription data with user-modified values
+      const subscriptionData = {
+        amount: amount,
+        category: currentTransaction.category || {
+          id: 'default',
+          name: 'Subscription',
+          icon: 'calendar',
+          color: '#888888'
+        },
+        date: currentTransaction.date,
+        note: subscriptionName,
+        additionalNote: subscriptionNote,
+        id: currentTransaction.id,
+        billingCycle: billingCycle
+      };
+      
+      console.log('Calling addSubscription with data:', JSON.stringify(subscriptionData));
+      
+      try {
+        // Call the WalletContext function
+        const subscriptionId = await addSubscription(subscriptionData);
+        
+        console.log('addSubscription returned ID:', subscriptionId);
+        
+        // Close the modal
+        setModalVisible(false);
+        setIsProcessing(false);
+        
+        if (subscriptionId) {
+          console.log('Subscription added successfully with ID:', subscriptionId);
+          Alert.alert(
+            'Success!',
+            'Your subscription was successfully added.\n\nYou can view and manage it in the Subscriptions page.',
+            [
+              { 
+                text: 'OK', 
+                style: 'default' 
+              },
+              {
+                text: 'Go to Subscriptions',
+                style: 'default',
+                onPress: () => router.push('/subscriptions')
+              }
+            ]
+          );
+        } else {
+          console.error('Failed to add subscription - no ID returned');
+          Alert.alert(
+            'Error',
+            'Failed to add subscription. Please try again.',
+            [{ text: 'OK' }]
+          );
+        }
+      } catch (subscriptionError) {
+        console.error('Exception in addSubscription call:', subscriptionError);
+        Alert.alert(
+          'Error',
+          'Failed to save subscription: ' + subscriptionError.message,
+          [{ text: 'OK' }]
+        );
+        setIsProcessing(false);
+      }
+    } catch (error) {
+      console.error('Error in handleConfirmSubscription:', error);
+      Alert.alert('Error', 'An unexpected error occurred');
+      setIsProcessing(false);
+    }
+  }, [currentTransaction, subscriptionName, subscriptionAmount, subscriptionNote, billingCycle, addSubscription, router]);
+  
+  // Cancel subscription modal
+  const handleCancelSubscription = useCallback(() => {
+    setModalVisible(false);
+    setCurrentTransaction(null);
+  }, []);
 
   // Render a transaction row
   const renderTransaction = useCallback((transaction) => {
@@ -794,6 +812,91 @@ export default function Calendar() {
       alignItems: 'center',
       marginLeft: 8,
     },
+    modalOverlay: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      padding: 20,
+    },
+    modalContent: {
+      backgroundColor: 'white',
+      borderRadius: 12,
+      padding: 24,
+      width: '100%',
+      maxWidth: 500,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+      elevation: 5,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      marginBottom: 16,
+      textAlign: 'center',
+      color: '#333',
+    },
+    textInput: {
+      borderWidth: 1,
+      borderColor: '#e0e0e0',
+      borderRadius: 8,
+      padding: 12,
+      marginBottom: 16,
+      fontSize: 16,
+    },
+    noteInput: {
+      height: 80,
+      textAlignVertical: 'top',
+    },
+    inputLabel: {
+      fontSize: 16,
+      marginBottom: 4,
+      color: '#555',
+      fontWeight: '500',
+    },
+    pickerContainer: {
+      borderWidth: 1,
+      borderColor: '#e0e0e0',
+      borderRadius: 8,
+      marginBottom: 16,
+      overflow: 'hidden',
+    },
+    picker: {
+      height: 50,
+      width: '100%',
+    },
+    modalButtons: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginTop: 8,
+    },
+    modalButton: {
+      padding: 14,
+      borderRadius: 8,
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    cancelButton: {
+      backgroundColor: '#f5f5f5',
+      marginRight: 8,
+    },
+    confirmButton: {
+      backgroundColor: '#4CAF50',
+      marginLeft: 8,
+    },
+    cancelButtonText: {
+      color: '#333',
+      fontWeight: 'bold',
+      fontSize: 16,
+    },
+    confirmButtonText: {
+      color: 'white',
+      fontWeight: 'bold',
+      fontSize: 16,
+    },
   });
 
   return (
@@ -908,6 +1011,82 @@ export default function Calendar() {
           </View>
         </View>
       </View>
+
+      {/* Subscription Creation Modal */}
+      <Modal
+        visible={isModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={handleCancelSubscription}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Add Monthly Subscription</Text>
+            
+            <Text style={styles.inputLabel}>Subscription Name</Text>
+            <TextInput
+              style={styles.textInput}
+              value={subscriptionName}
+              onChangeText={setSubscriptionName}
+              placeholder="Name of subscription"
+              autoCapitalize="words"
+            />
+            
+            <Text style={styles.inputLabel}>Amount (€)</Text>
+            <TextInput
+              style={styles.textInput}
+              value={subscriptionAmount}
+              onChangeText={setSubscriptionAmount}
+              placeholder="0.00"
+              keyboardType="decimal-pad"
+            />
+            
+            <Text style={styles.inputLabel}>Notes (Optional)</Text>
+            <TextInput
+              style={[styles.textInput, styles.noteInput]}
+              value={subscriptionNote}
+              onChangeText={setSubscriptionNote}
+              placeholder="Additional notes"
+              multiline={true}
+              numberOfLines={2}
+            />
+            
+            <Text style={styles.inputLabel}>Billing Frequency</Text>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={billingCycle}
+                onValueChange={(value) => setBillingCycle(value)}
+                style={styles.picker}
+              >
+                <Picker.Item label="Monthly" value="monthly" />
+                <Picker.Item label="Weekly" value="weekly" />
+                <Picker.Item label="Yearly" value="yearly" />
+                <Picker.Item label="Quarterly" value="quarterly" />
+              </Picker>
+            </View>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={handleCancelSubscription}
+                disabled={isProcessing}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={handleConfirmSubscription}
+                disabled={isProcessing}
+              >
+                <Text style={styles.confirmButtonText}>
+                  {isProcessing ? 'Adding...' : 'Add Subscription'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 } 

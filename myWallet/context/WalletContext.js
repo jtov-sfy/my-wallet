@@ -700,8 +700,8 @@ export function WalletProvider({ children }) {
           startDate: typeof expense.date === 'string' ? expense.date : 
                     (expense.date instanceof Date ? expense.date.toISOString() : new Date().toISOString()),
           lastBilledDate: null, // New subscriptions haven't been billed yet
-          billingCycle: 'monthly', // Default to monthly
-          note: String(expense.note || '')
+          billingCycle: expense.billingCycle || 'monthly', // Use provided billing cycle or default to monthly
+          note: String(expense.additionalNote || expense.note || '')
         };
         
         console.log('Prepared subscription data:', JSON.stringify(newSubscription));
@@ -730,8 +730,8 @@ export function WalletProvider({ children }) {
             
             console.log('Subscription saved to AsyncStorage with local ID:', localId);
             
-            // Update local state
-            setSubscriptions(prevSubscriptions => [...prevSubscriptions, subscriptionWithId]);
+            // Don't update local state - the Firebase listener will handle this
+            // This prevents duplicate entries in the UI
             
             // Add to operation queue for later sync
             await addToOperationQueue({
@@ -782,13 +782,8 @@ export function WalletProvider({ children }) {
           if (verifySnapshot.exists()) {
             console.log('Verified subscription was saved');
             
-            // Update the local state with the new subscription
-            const newSubscriptionWithId = {
-              ...newSubscription,
-              id: subscriptionId
-            };
-            
-            setSubscriptions(prevSubscriptions => [...prevSubscriptions, newSubscriptionWithId]);
+            // Don't manually update the state - the Firebase listener will handle this
+            // This prevents duplicate entries in the UI
             
             return subscriptionId;
           } else {
@@ -813,8 +808,7 @@ export function WalletProvider({ children }) {
             
             console.log('Subscription saved to AsyncStorage after Firebase failure, local ID:', localId);
             
-            // Update local state
-            setSubscriptions(prevSubscriptions => [...prevSubscriptions, subscriptionWithId]);
+            // Don't update local state - AsyncStorage will be used if needed
             
             // Add to operation queue for later sync
             await addToOperationQueue({
