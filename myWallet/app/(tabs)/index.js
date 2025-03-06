@@ -381,7 +381,12 @@ export default function Page() {
           {/* Balance Card */}
           <View style={styles.balanceCard}>
             <Text style={styles.balanceLabel}>Current Balance</Text>
-            <Text style={styles.balanceAmount}>€{balance.toFixed(2)}</Text>
+            <Text style={[
+              styles.balanceAmount, 
+              { color: balance >= 0 ? '#4CAF50' : '#E91E63' }
+            ]}>
+              €{balance.toFixed(2)}
+            </Text>
             <View style={styles.monthlyStats}>
               <View style={styles.monthlyStat}>
                 <Text style={styles.monthlyStatLabel}>Income</Text>
@@ -874,25 +879,30 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+    alignItems: 'center',
   },
   balanceLabel: {
     fontSize: 14,
     color: '#666',
     marginBottom: 8,
+    textAlign: 'center',
   },
   balanceAmount: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#4CAF50',
     marginBottom: 16,
+    textAlign: 'center',
   },
   monthlyStats: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: 8,
+    paddingHorizontal: 16,
   },
   monthlyStat: {
     alignItems: 'center',
     flex: 1,
+    paddingHorizontal: 12,
   },
   monthlyStatLabel: {
     fontSize: 12,
@@ -904,9 +914,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   statDivider: {
-    width: 1,
+    width: 2,
     height: '100%',
     backgroundColor: '#eee',
+    marginHorizontal: 20,
   },
   quickActions: {
     flexDirection: 'row',
