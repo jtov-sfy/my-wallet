@@ -24,6 +24,8 @@ export default function Calendar() {
   const [billingCycle, setBillingCycle] = useState('monthly');
   const [currentTransaction, setCurrentTransaction] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
+  const [expenseToDelete, setExpenseToDelete] = useState(null);
 
   // Initialize local expenses from context
   useEffect(() => {
@@ -207,15 +209,56 @@ export default function Calendar() {
     }, { expenses: 0, income: 0 });
   }, [selectedDateTransactions]);
 
-  // Handle direct delete without confirmation
-  const handleDirectDelete = useCallback((transactionId) => {
-    console.log('Delete operation started for ID:', transactionId);
-    
-    if (!transactionId) {
-      console.error('No transaction ID provided for deletion');
+  // Replace the direct delete handler with a confirmation flow
+  const handleDeleteExpense = useCallback((transaction) => {
+    setExpenseToDelete(transaction);
+    setIsDeleteModalVisible(true);
+  }, []);
+
+  const confirmDeleteExpense = useCallback(async () => {
+    if (!expenseToDelete || !expenseToDelete.id) {
+      console.error('No expense selected for deletion');
       return;
     }
     
+    try {
+      // Update local state immediately
+      const newExpenses = localExpenses.filter(t => t.id !== expenseToDelete.id);
+      setLocalExpenses(newExpenses);
+      
+      // Force refresh
+      setRefreshKey(prev => prev + 1);
+      
+      // Call delete function in context
+      await deleteExpense(expenseToDelete.id);
+      
+      // Show success message
+      Alert.alert(
+        'Success',
+        'Expense deleted successfully!',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      Alert.alert(
+        'Error',
+        'Failed to delete expense. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      // Reset delete modal state
+      setIsDeleteModalVisible(false);
+      setExpenseToDelete(null);
+    }
+  }, [deleteExpense, expenseToDelete, localExpenses]);
+
+  const cancelDeleteExpense = useCallback(() => {
+    setIsDeleteModalVisible(false);
+    setExpenseToDelete(null);
+  }, []);
+
+  // Keep handleDirectDelete for backward compatibility but modify it to use the confirmation flow
+  const handleDirectDelete = useCallback((transactionId) => {
     try {
       // Find the transaction to delete
       const transaction = localExpenses.find(t => t.id === transactionId);
@@ -224,27 +267,12 @@ export default function Calendar() {
         return;
       }
       
-      // Update local state immediately
-      const newExpenses = localExpenses.filter(t => t.id !== transactionId);
-      setLocalExpenses(newExpenses);
-      
-      // Force refresh
-      setRefreshKey(prev => prev + 1);
-      
-      // Call delete function in context
-      deleteExpense(transactionId)
-        .then(result => {
-          if (!result) {
-            console.error('Delete operation failed for ID:', transactionId);
-          }
-        })
-        .catch(err => {
-          console.error('Error in delete operation:', err);
-        });
+      // Use the new confirmation flow
+      handleDeleteExpense(transaction);
     } catch (error) {
       console.error('Unexpected error in handleDirectDelete:', error);
     }
-  }, [localExpenses, deleteExpense]);
+  }, [localExpenses, handleDeleteExpense]);
 
   // Update useEffect to handle refresh
   useEffect(() => {
@@ -459,7 +487,7 @@ export default function Calendar() {
             <TouchableOpacity
               onPress={() => {
                 console.log('Delete button pressed for:', transaction.id);
-                handleDirectDelete(transaction.id);
+                handleDeleteExpense(transaction);
               }}
               style={[styles.actionButton, { backgroundColor: theme.error }]}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -470,7 +498,7 @@ export default function Calendar() {
         </View>
       </View>
     );
-  }, [theme, formatTime, handleDirectDelete, handleAddToSubscriptions]);
+  }, [theme, formatTime, handleDeleteExpense, handleAddToSubscriptions]);
 
   const styles = StyleSheet.create({
     safeArea: {
@@ -816,8 +844,14 @@ export default function Calendar() {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: 'rgba(0,0,0,0.5)',
+      backgroundColor: 'rgba(0,0,0,0.7)',
       padding: 20,
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      zIndex: 1000,
     },
     modalContent: {
       backgroundColor: 'white',
@@ -826,17 +860,19 @@ export default function Calendar() {
       width: '100%',
       maxWidth: 500,
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.3,
-      shadowRadius: 4,
-      elevation: 5,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.5,
+      shadowRadius: 8,
+      elevation: 10,
+      borderWidth: 1,
+      borderColor: '#ddd',
     },
     modalTitle: {
-      fontSize: 20,
+      fontSize: 22,
       fontWeight: 'bold',
+      color: '#333',
       marginBottom: 16,
       textAlign: 'center',
-      color: '#333',
     },
     textInput: {
       borderWidth: 1,
@@ -873,29 +909,68 @@ export default function Calendar() {
       marginTop: 8,
     },
     modalButton: {
-      padding: 14,
-      borderRadius: 8,
       flex: 1,
-      alignItems: 'center',
+      height: 55,
+      borderRadius: 12,
       justifyContent: 'center',
+      alignItems: 'center',
     },
     cancelButton: {
-      backgroundColor: '#f5f5f5',
+      backgroundColor: '#f0f0f0',
       marginRight: 8,
-    },
-    confirmButton: {
-      backgroundColor: '#4CAF50',
-      marginLeft: 8,
+      borderWidth: 1,
+      borderColor: '#ddd',
     },
     cancelButtonText: {
-      color: '#333',
-      fontWeight: 'bold',
+      color: '#444',
       fontSize: 16,
+      fontWeight: '600',
     },
-    confirmButtonText: {
+    deleteButton: {
+      backgroundColor: '#E91E63',
+      marginLeft: 8,
+    },
+    deleteButtonText: {
       color: 'white',
-      fontWeight: 'bold',
       fontSize: 16,
+      fontWeight: '600',
+    },
+    expenseSummary: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#f8f8f8',
+      borderRadius: 12,
+      padding: 16,
+      marginVertical: 16,
+      borderWidth: 1,
+      borderColor: '#eee',
+    },
+    summaryDetails: {
+      marginLeft: 16,
+      flex: 1,
+    },
+    summaryName: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: '#333',
+      marginBottom: 4,
+    },
+    summaryAmount: {
+      fontSize: 22,
+      fontWeight: '600',
+      color: '#E91E63',
+      marginBottom: 4,
+    },
+    summaryDate: {
+      fontSize: 14,
+      color: '#666',
+    },
+    warningText: {
+      fontSize: 16,
+      color: '#444',
+      marginBottom: 24,
+      lineHeight: 22,
+      textAlign: 'center',
     },
   });
 
@@ -1087,6 +1162,71 @@ export default function Calendar() {
           </View>
         </View>
       </Modal>
+
+      {/* Expense Delete Confirmation Modal */}
+      <Modal
+        visible={isDeleteModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={cancelDeleteExpense}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Delete Expense</Text>
+            
+            {expenseToDelete && (
+              <>
+                <View style={styles.expenseSummary}>
+                  <View style={[styles.categoryIcon, { backgroundColor: expenseToDelete.category?.color || '#888888' }]}>
+                    <Ionicons 
+                      name={expenseToDelete.category?.icon || 'cart'} 
+                      size={24} 
+                      color="white" 
+                    />
+                  </View>
+                  <View style={styles.summaryDetails}>
+                    <Text style={styles.summaryName}>{expenseToDelete.category?.name || 'Expense'}</Text>
+                    <Text style={styles.summaryAmount}>{formatCurrency(expenseToDelete.amount)}</Text>
+                    <Text style={styles.summaryDate}>
+                      {formatMonthDay(expenseToDelete.date)}
+                    </Text>
+                  </View>
+                </View>
+                
+                <Text style={styles.warningText}>
+                  Are you sure you want to delete this expense? This action cannot be undone.
+                </Text>
+                
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.cancelButton]}
+                    onPress={cancelDeleteExpense}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.deleteButton]}
+                    onPress={confirmDeleteExpense}
+                  >
+                    <Text style={styles.deleteButtonText}>
+                      Delete Expense
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
-} 
+}
+
+// Add helper function to format month/day if it doesn't exist
+const formatMonthDay = (dateString) => {
+  const date = new Date(dateString);
+  const month = date.toLocaleString('default', { month: 'short' });
+  const day = date.getDate();
+  return `${month} ${day}, ${date.getFullYear()}`;
+}; 

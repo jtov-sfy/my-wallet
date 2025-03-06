@@ -6,7 +6,7 @@ import { useWallet } from '../../context/WalletContext';
 import { useMemo, useState, useCallback } from 'react';
 
 export default function Page() {
-  const { balance, monthlyBudget, expenses, addExpense } = useWallet();
+  const { balance, monthlyBudget, expenses, addExpense, deleteExpense } = useWallet();
 
   // Transaction modal state
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
@@ -21,6 +21,10 @@ export default function Page() {
 
   // Add the date picker state
   const [isDatePickerVisible, setIsDatePickerVisible] = useState(false);
+
+  // Add these state variables at the top of the component with other state variables
+  const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
+  const [expenseToDelete, setExpenseToDelete] = useState(null);
 
   // Categories for transactions
   const CATEGORIES = [
@@ -317,6 +321,46 @@ export default function Page() {
     return `${year}-${month}-${day}`;
   };
 
+  // Add the handleDeleteExpense function to handle deletion request
+  const handleDeleteExpense = (expense) => {
+    setExpenseToDelete(expense);
+    setIsDeleteModalVisible(true);
+  };
+
+  // Add the confirmDeleteExpense function to handle confirmation
+  const confirmDeleteExpense = async () => {
+    if (!expenseToDelete) return;
+    
+    try {
+      // Delete the expense using your wallet context
+      await deleteExpense(expenseToDelete.id);
+      
+      // Show success message
+      Alert.alert(
+        'Success',
+        'Expense deleted successfully!',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      Alert.alert(
+        'Error',
+        'Failed to delete expense. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      // Reset state
+      setIsDeleteModalVisible(false);
+      setExpenseToDelete(null);
+    }
+  };
+
+  // Add the cancelDeleteExpense function to handle cancellation
+  const cancelDeleteExpense = () => {
+    setIsDeleteModalVisible(false);
+    setExpenseToDelete(null);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
@@ -444,21 +488,37 @@ export default function Page() {
               <Text style={styles.noExpenses}>No recent expenses</Text>
             ) : (
               recentExpenses.map((expense) => (
-                <View key={expense.id} style={styles.transactionItem}>
+                <TouchableOpacity 
+                  key={expense.id} 
+                  style={styles.transactionItem}
+                  onLongPress={() => handleDeleteExpense(expense)}
+                >
                   <View style={styles.transactionLeft}>
-                    <View style={[styles.transactionIcon, { backgroundColor: expense.category.color }]}>
-                      <Ionicons name={expense.category.icon} size={20} color="white" />
+                    <View style={[styles.transactionIcon, { backgroundColor: expense.category?.color || '#888888' }]}>
+                      <Ionicons 
+                        name={expense.category?.icon || 'cart'} 
+                        size={20} 
+                        color="white" 
+                      />
                     </View>
                     <View>
-                      <Text style={styles.transactionTitle}>{expense.category.name}</Text>
+                      <Text style={styles.transactionTitle}>{expense.category?.name || 'Expense'}</Text>
                       {expense.note ? (
                         <Text style={styles.transactionNote}>{expense.note}</Text>
                       ) : null}
                       <Text style={styles.transactionDate}>{formatDate(expense.date)}</Text>
                     </View>
                   </View>
-                  <Text style={styles.transactionAmount}>-€{expense.amount.toFixed(2)}</Text>
-                </View>
+                  <View style={styles.transactionRight}>
+                    <Text style={styles.transactionAmount}>-€{expense.amount.toFixed(2)}</Text>
+                    <TouchableOpacity
+                      onPress={() => handleDeleteExpense(expense)}
+                      style={styles.deleteButton}
+                    >
+                      <Ionicons name="trash-outline" size={18} color="#999" />
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
               ))
             )}
           </View>
@@ -703,6 +763,63 @@ export default function Page() {
             </View>
           </View>
         </Modal>
+
+        {/* Expense Delete Confirmation Modal */}
+        <Modal
+          visible={isDeleteModalVisible}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={cancelDeleteExpense}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Delete Expense</Text>
+              
+              {expenseToDelete && (
+                <>
+                  <View style={styles.expenseSummary}>
+                    <View style={[styles.categoryIcon, { backgroundColor: expenseToDelete.category?.color || '#888888' }]}>
+                      <Ionicons 
+                        name={expenseToDelete.category?.icon || 'cart'} 
+                        size={24} 
+                        color="white" 
+                      />
+                    </View>
+                    <View style={styles.summaryDetails}>
+                      <Text style={styles.summaryName}>{expenseToDelete.category?.name || 'Expense'}</Text>
+                      <Text style={styles.summaryAmount}>{formatCurrency(expenseToDelete.amount)}</Text>
+                      <Text style={styles.summaryDate}>
+                        {formatDate(expenseToDelete.date)}
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  <Text style={styles.warningText}>
+                    Are you sure you want to delete this expense? This action cannot be undone.
+                  </Text>
+                  
+                  <View style={styles.modalButtons}>
+                    <TouchableOpacity
+                      style={[styles.modalButton, styles.cancelButton]}
+                      onPress={cancelDeleteExpense}
+                    >
+                      <Text style={styles.cancelButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={[styles.modalButton, styles.deleteButton]}
+                      onPress={confirmDeleteExpense}
+                    >
+                      <Text style={styles.deleteButtonText}>
+                        Delete Expense
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -893,6 +1010,7 @@ const styles = StyleSheet.create({
   transactionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   transactionIcon: {
     width: 40,
@@ -905,6 +1023,7 @@ const styles = StyleSheet.create({
   transactionTitle: {
     fontSize: 16,
     fontWeight: '500',
+    color: '#333',
   },
   transactionNote: {
     fontSize: 14,
@@ -916,15 +1035,90 @@ const styles = StyleSheet.create({
     color: '#999',
     marginTop: 2,
   },
+  transactionRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   transactionAmount: {
     fontSize: 16,
     fontWeight: '600',
     color: '#E91E63',
+    marginRight: 8,
+  },
+  deleteButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   noExpenses: {
     textAlign: 'center',
     color: '#666',
     padding: 20,
+  },
+  expenseSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f9f9f9',
+    borderRadius: 12,
+    padding: 16,
+    marginVertical: 16,
+  },
+  summaryDetails: {
+    marginLeft: 16,
+    flex: 1,
+  },
+  summaryName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  summaryAmount: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#E91E63',
+    marginBottom: 4,
+  },
+  summaryDate: {
+    fontSize: 14,
+    color: '#666',
+  },
+  warningText: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  modalButton: {
+    flex: 1,
+    height: 50,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#f0f0f0',
+    marginRight: 8,
+  },
+  cancelButtonText: {
+    color: '#666',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  deleteButton: {
+    backgroundColor: '#E91E63',
+    marginLeft: 8,
+  },
+  deleteButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,
@@ -1034,30 +1228,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 16,
     textAlign: 'center',
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 16,
-  },
-  modalButton: {
-    height: 50,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  cancelButton: {
-    marginRight: 8,
-    backgroundColor: '#f0f0f0',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  cancelButtonText: {
-    color: '#666',
-    fontSize: 16,
-    fontWeight: '600',
   },
   submitButton: {
     marginLeft: 8,
