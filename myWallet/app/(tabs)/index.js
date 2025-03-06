@@ -491,23 +491,15 @@ export default function Page() {
           <View style={styles.transactionsSection}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Recent Expenses</Text>
-              <TouchableOpacity 
-                style={styles.calendarButton}
-                onPress={() => router.push('/(tabs)/calendar')}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="calendar" size={24} color="#2196F3" />
-              </TouchableOpacity>
             </View>
             
             {recentExpenses.length === 0 ? (
               <Text style={styles.noExpenses}>No recent expenses</Text>
             ) : (
               recentExpenses.map((expense) => (
-                <TouchableOpacity 
+                <View 
                   key={expense.id} 
                   style={styles.transactionItem}
-                  onLongPress={() => handleDeleteExpense(expense)}
                 >
                   <View style={styles.transactionLeft}>
                     <View style={[styles.transactionIcon, { backgroundColor: expense.category?.color || '#888888' }]}>
@@ -527,14 +519,8 @@ export default function Page() {
                   </View>
                   <View style={styles.transactionRight}>
                     <Text style={styles.transactionAmount}>-€{expense.amount.toFixed(2)}</Text>
-                    <TouchableOpacity
-                      onPress={() => handleDeleteExpense(expense)}
-                      style={styles.deleteButton}
-                    >
-                      <Ionicons name="trash-outline" size={18} color="#999" />
-                    </TouchableOpacity>
                   </View>
-                </TouchableOpacity>
+                </View>
               ))
             )}
           </View>
@@ -1016,11 +1002,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  calendarButton: {
-    padding: 8,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 20,
-  },
   transactionItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1066,13 +1047,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#E91E63',
     marginRight: 8,
-  },
-  deleteButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   noExpenses: {
     textAlign: 'center',
