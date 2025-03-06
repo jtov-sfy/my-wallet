@@ -421,6 +421,17 @@ export default function Page() {
 
             <TouchableOpacity 
               style={styles.actionButton}
+              onPress={() => router.push('/analytics')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.actionIcon, { backgroundColor: '#9C27B0' }]}>
+                <Ionicons name="bar-chart" size={24} color="white" />
+              </View>
+              <Text style={styles.actionText}>Analytics</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.actionButton}
               onPress={handleBudgets}
               activeOpacity={0.7}
             >
