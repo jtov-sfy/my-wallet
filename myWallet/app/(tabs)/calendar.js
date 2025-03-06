@@ -5,9 +5,10 @@ import { useWallet } from '../../context/WalletContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function Calendar() {
-  const { expenses, deleteExpense } = useWallet();
+  const { expenses, deleteExpense, addSubscription } = useWallet();
   const { theme } = useTheme();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedMonth, setSelectedMonth] = useState(new Date());
@@ -264,6 +265,194 @@ export default function Calendar() {
       return dateB - dateA;
     });
   }, [selectedDate, localExpenses]);
+
+  // Handle adding a transaction as a subscription
+  const handleAddToSubscriptions = useCallback((transactionId) => {
+    try {
+      console.log('Adding transaction to subscriptions, ID:', transactionId);
+      
+      // Find the transaction
+      const transaction = localExpenses.find(exp => exp.id === transactionId);
+      if (!transaction) {
+        console.error('Transaction not found:', transactionId);
+        Alert.alert('Error', 'Transaction not found');
+        return;
+      }
+      
+      console.log('Found transaction:', JSON.stringify(transaction).slice(0, 300));
+      
+      // Enhanced confirmation with more details
+      Alert.alert(
+        'Add Monthly Subscription',
+        `Are you sure you want to create a subscription for:\n\n` +
+        `${transaction.note || transaction.category?.name || 'Unnamed'}\n` +
+        `Amount: ${formatCurrency(transaction.amount)}\n` +
+        `Category: ${transaction.category?.name || 'Uncategorized'}\n\n` +
+        `This will be added to your monthly subscriptions and can be managed from the Subscriptions screen.`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          },
+          {
+            text: 'Add Subscription',
+            style: 'default',
+            onPress: async () => {
+              try {
+                console.log('User confirmed adding subscription, processing...');
+                
+                // Call the context function to add subscription using Firebase
+                if (typeof addSubscription !== 'function') {
+                  console.error('addSubscription is not a function');
+                  Alert.alert('Error', 'Could not add subscription due to an internal error');
+                  return;
+                }
+                
+                // Create a simplified clean subscription object from the transaction
+                const subscriptionData = {
+                  amount: transaction.amount || 0,
+                  category: transaction.category || {
+                    id: 'default',
+                    name: 'Subscription',
+                    icon: 'calendar',
+                    color: '#888888'
+                  },
+                  date: transaction.date,
+                  note: transaction.note || '',
+                  id: transaction.id
+                };
+                
+                console.log('Calling addSubscription with data:', 
+                            JSON.stringify(subscriptionData));
+                
+                // First display a temporary loading message  
+                Alert.alert(
+                  'Processing',
+                  'Adding subscription...',
+                  [{ text: 'OK' }],
+                  { cancelable: false }
+                );
+                
+                // Wait a short time to ensure the alert is displayed
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                try {
+                  // Call the WalletContext function (this will use Firebase)
+                  const subscriptionId = await addSubscription(subscriptionData);
+                  
+                  console.log('addSubscription returned ID:', subscriptionId);
+                  
+                  // Show the result alert after the processing is done
+                  if (subscriptionId) {
+                    console.log('Subscription added successfully with ID:', subscriptionId);
+                    Alert.alert(
+                      'Success!',
+                      'Your subscription was successfully added.\n\nYou can view and manage it in the Subscriptions page.',
+                      [
+                        { 
+                          text: 'OK', 
+                          style: 'default' 
+                        },
+                        {
+                          text: 'Go to Subscriptions',
+                          style: 'default',
+                          onPress: () => router.push('/subscriptions')
+                        }
+                      ]
+                    );
+                  } else {
+                    console.error('Failed to add subscription - no ID returned');
+                    Alert.alert(
+                      'Error',
+                      'Failed to add subscription. Please try again.',
+                      [{ text: 'OK' }]
+                    );
+                  }
+                } catch (subscriptionError) {
+                  console.error('Exception in addSubscription call:', subscriptionError);
+                  Alert.alert(
+                    'Error',
+                    'Failed to save subscription: ' + subscriptionError.message,
+                    [{ text: 'OK' }]
+                  );
+                }
+                
+              } catch (error) {
+                console.error('Error in subscription creation process:', error);
+                Alert.alert(
+                  'Error',
+                  'Failed to save subscription. Please try again.',
+                  [{ text: 'OK' }]
+                );
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error in handleAddToSubscriptions:', error);
+      Alert.alert('Error', 'Failed to add subscription');
+    }
+  }, [localExpenses, addSubscription, formatCurrency, router]);
+
+  // Render a transaction row
+  const renderTransaction = useCallback((transaction) => {
+    const isIncome = transaction.type === 'income';
+    const formattedAmount = formatCurrency(transaction.amount);
+    const formattedTime = formatTime(transaction.date);
+    
+    return (
+      <View key={transaction.id} style={[styles.transactionItem, { backgroundColor: theme.cardBackground }]}>
+        <View style={styles.transactionLeft}>
+          <View style={[styles.categoryIcon, { backgroundColor: transaction.category.color }]}>
+            <Ionicons name={transaction.category.icon} size={24} color="white" />
+          </View>
+          <View style={styles.transactionInfo}>
+            <Text style={[styles.transactionName, { color: theme.text }]}>
+              {transaction.category.name}
+            </Text>
+            {transaction.note && (
+              <Text style={[styles.transactionNote, { color: theme.textSecondary }]}>
+                {transaction.note}
+              </Text>
+            )}
+            <Text style={[styles.transactionTime, { color: theme.textSecondary }]}>
+              {formattedTime}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.transactionRight}>
+          <Text
+            style={[
+              styles.transactionAmount,
+              { color: isIncome ? theme.success : theme.error }
+            ]}
+          >
+            {isIncome ? '+' : ''}{formattedAmount}
+          </Text>
+          <View style={styles.transactionActions}>
+            <TouchableOpacity
+              onPress={() => handleAddToSubscriptions(transaction.id)}
+              style={[styles.actionButton, { backgroundColor: theme.primary }]}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="calendar-outline" size={20} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                console.log('Delete button pressed for:', transaction.id);
+                handleDirectDelete(transaction.id);
+              }}
+              style={[styles.actionButton, { backgroundColor: theme.error }]}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="trash-outline" size={20} color="white" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  }, [theme, formatTime, handleDirectDelete, handleAddToSubscriptions]);
 
   const styles = StyleSheet.create({
     safeArea: {
@@ -550,6 +739,61 @@ export default function Calendar() {
       justifyContent: 'center',
       padding: 8,
     },
+    subscriptionButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: theme.primary,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 8
+    },
+    transactionItem: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.divider,
+      backgroundColor: theme.surface,
+    },
+    transactionLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    transactionInfo: {
+      marginLeft: 12,
+      flex: 1,
+    },
+    transactionName: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: theme.text,
+    },
+    transactionNote: {
+      fontSize: 14,
+      color: theme.textSecondary,
+    },
+    transactionTime: {
+      fontSize: 14,
+      color: theme.textSecondary,
+    },
+    transactionRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    transactionActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    actionButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginLeft: 8,
+    },
   });
 
   return (
@@ -658,53 +902,7 @@ export default function Calendar() {
               {getFilteredTransactions().length === 0 ? (
                 <Text style={styles.noExpenses}>No transactions for this date</Text>
               ) : (
-                getFilteredTransactions().map((transaction) => (
-                  <View
-                    key={transaction.id}
-                    style={styles.expenseItem}
-                  >
-                    <View style={styles.expenseLeft}>
-                      <View style={[styles.categoryIcon, { backgroundColor: transaction.category.color }]}>
-                        <Ionicons name={transaction.category.icon} size={20} color="white" />
-                      </View>
-                      <View style={styles.expenseInfo}>
-                        <Text style={styles.expenseCategory}>{transaction.category.name}</Text>
-                        {transaction.note && (
-                          <Text style={styles.expenseNote}>{transaction.note}</Text>
-                        )}
-                        <Text style={styles.expenseTime}>{formatTime(transaction.date)}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.expenseRight}>
-                      <Text style={[
-                        styles.transactionAmount,
-                        transaction.type === 'income' ? styles.incomeAmount : styles.expenseAmount
-                      ]}>
-                        {`${transaction.type === 'income' ? '+' : '-'}${formatCurrency(Math.abs(transaction.amount))}`}
-                      </Text>
-                      
-                      {/* Delete Button */}
-                      <TouchableOpacity
-                        onPress={() => {
-                          console.log('Delete button pressed for:', transaction.id);
-                          handleDirectDelete(transaction.id);
-                        }}
-                        activeOpacity={0.6}
-                        style={{
-                          width: 50,
-                          height: 50,
-                          backgroundColor: theme.error,
-                          borderRadius: 25,
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                          marginLeft: 10,
-                        }}
-                      >
-                        <Ionicons name="trash-outline" size={24} color="white" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))
+                getFilteredTransactions().map((transaction) => renderTransaction(transaction))
               )}
             </ScrollView>
           </View>

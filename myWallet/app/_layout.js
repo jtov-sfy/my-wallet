@@ -11,10 +11,6 @@ export default function Layout() {
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen 
-            name="[...missing]"
-            options={{ presentation: 'modal' }}
-          />
-          <Stack.Screen 
             name="add-expense" 
             options={{ presentation: 'modal' }}
           />
@@ -24,6 +20,10 @@ export default function Layout() {
           />
           <Stack.Screen 
             name="budgets" 
+            options={{ presentation: 'modal' }}
+          />
+          <Stack.Screen 
+            name="subscriptions" 
             options={{ presentation: 'modal' }}
           />
         </Stack>

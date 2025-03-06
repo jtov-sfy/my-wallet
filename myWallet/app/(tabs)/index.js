@@ -15,72 +15,97 @@ export default function Page() {
     return expenses
       .filter(expense => new Date(expense.date) >= firstDayOfMonth)
       .reduce((totals, transaction) => {
-        if (transaction.type === 'income' || transaction.amount < 0) {
+        if (transaction.type === 'income') {
           totals.income += Math.abs(transaction.amount);
         } else {
-          totals.expenses += transaction.amount;
+          totals.expense += Math.abs(transaction.amount);
         }
         return totals;
-      }, { expenses: 0, income: 0 });
+      }, { income: 0, expense: 0 });
   }, [expenses]);
 
-  // Get recent expenses
-  const recentExpenses = useMemo(() => {
-    return expenses.slice(0, 3);
-  }, [expenses]);
-
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    const now = new Date();
+  // Create a budget object from the monthly totals and budget amount
+  const budgetData = useMemo(() => {
+    // If monthlyBudget is a number (Firebase structure), create an object from it
+    const budgetAmount = typeof monthlyBudget === 'number' ? monthlyBudget : 
+                        (monthlyBudget?.total || 0);
     
-    if (date.toDateString() === now.toDateString()) {
-      return `Today, ${date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
-    }
-    return date.toLocaleDateString('en-US', { 
+    return {
+      total: budgetAmount,
+      spent: monthlyTotals.expense,
+      remaining: Math.max(0, budgetAmount - monthlyTotals.expense)
+    };
+  }, [monthlyBudget, monthlyTotals]);
+
+  // Format date for display
+  const formatDate = (date) => {
+    if (!date) return '';
+    const dateObj = new Date(date);
+    return dateObj.toLocaleDateString('en-US', { 
+      year: 'numeric', 
       month: 'short', 
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+      day: 'numeric'
     });
   };
 
-  const handleAddExpense = () => {
-    router.push('/add-expense');
+  // Navigate to add transaction screen
+  const handleAddTransaction = () => {
+    router.push('/add-transaction');
   };
 
+  // Navigate to budgets screen
   const handleBudgets = () => {
-    router.push('/budgets');
+    router.push('/budget');
   };
 
+  // Navigate to analytics screen
   const handleAnalytics = () => {
     router.push('/analytics');
   };
 
+  // Navigate to settings
+  const handleSettings = () => {
+    router.push('/settings');
+  };
+
+  // Get recent expenses
+  const recentExpenses = useMemo(() => {
+    return expenses
+      .filter(expense => expense.type === 'expense')
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 5);
+  }, [expenses]);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <ScrollView style={styles.scrollView}>
-          {/* Monthly Totals Cards */}
-          <View style={styles.monthlyCards}>
-            <View style={[styles.balanceCard, styles.expenseCard, styles.halfCard]}>
-              <Text style={styles.balanceLabel}>Monthly Expenses</Text>
-              <Text style={[styles.balanceAmount, { color: '#E91E63', fontSize: 28 }]}>
-                -{monthlyTotals.expenses.toFixed(2)}€
-              </Text>
-              <View style={styles.balanceChange}>
-                <Ionicons name="calendar-outline" size={20} color="#666" />
-                <Text style={styles.balanceChangeText}>This Month</Text>
-              </View>
-            </View>
+        <View style={styles.header}>
+          <Text style={styles.greeting}>My Wallet</Text>
+          <TouchableOpacity 
+            style={styles.settingsButton}
+            onPress={handleSettings}
+          >
+            <Ionicons name="settings-outline" size={24} color="#333" />
+          </TouchableOpacity>
+        </View>
 
-            <View style={[styles.balanceCard, styles.incomeCard, styles.halfCard]}>
-              <Text style={styles.balanceLabel}>Monthly Income</Text>
-              <Text style={[styles.balanceAmount, { color: '#4CAF50', fontSize: 28 }]}>
-                +{monthlyTotals.income.toFixed(2)}€
-              </Text>
-              <View style={styles.balanceChange}>
-                <Ionicons name="calendar-outline" size={20} color="#666" />
-                <Text style={styles.balanceChangeText}>This Month</Text>
+        <ScrollView 
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Balance Card */}
+          <View style={styles.balanceCard}>
+            <Text style={styles.balanceLabel}>Current Balance</Text>
+            <Text style={styles.balanceAmount}>€{balance.toFixed(2)}</Text>
+            <View style={styles.monthlyStats}>
+              <View style={styles.monthlyStat}>
+                <Text style={styles.monthlyStatLabel}>Income</Text>
+                <Text style={styles.monthlyStatAmount}>€{monthlyTotals.income.toFixed(2)}</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.monthlyStat}>
+                <Text style={styles.monthlyStatLabel}>Expenses</Text>
+                <Text style={styles.monthlyStatAmount}>€{monthlyTotals.expense.toFixed(2)}</Text>
               </View>
             </View>
           </View>
@@ -89,13 +114,13 @@ export default function Page() {
           <View style={styles.quickActions}>
             <TouchableOpacity 
               style={styles.actionButton}
-              onPress={handleAddExpense}
+              onPress={handleAddTransaction}
               activeOpacity={0.7}
             >
-              <View style={[styles.actionIcon, { backgroundColor: '#E91E63' }]}>
-                <Ionicons name="add-circle" size={24} color="white" />
+              <View style={[styles.actionIcon, { backgroundColor: '#4CAF50' }]}>
+                <Ionicons name="add" size={24} color="white" />
               </View>
-              <Text style={styles.actionText}>Transaction</Text>
+              <Text style={styles.actionText}>Add Transaction</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
@@ -136,8 +161,8 @@ export default function Page() {
                   style={[
                     styles.progressFill,
                     { 
-                      width: `${(monthlyBudget.spent / monthlyBudget.total) * 100}%`,
-                      backgroundColor: monthlyBudget.spent > monthlyBudget.total ? '#E91E63' : '#4CAF50'
+                      width: `${(budgetData.spent / (budgetData.total || 1)) * 100}%`,
+                      backgroundColor: budgetData.spent > budgetData.total ? '#E91E63' : '#4CAF50'
                     }
                   ]}
                 />
@@ -145,17 +170,17 @@ export default function Page() {
               <View style={styles.budgetStats}>
                 <View style={styles.budgetStat}>
                   <Text style={styles.budgetStatLabel}>Spent</Text>
-                  <Text style={styles.budgetStatAmount}>€{monthlyBudget.spent.toFixed(2)}</Text>
+                  <Text style={styles.budgetStatAmount}>€{budgetData.spent.toFixed(2)}</Text>
                 </View>
                 <View style={styles.budgetStat}>
                   <Text style={styles.budgetStatLabel}>Remaining</Text>
                   <Text style={[styles.budgetStatAmount, { color: '#4CAF50' }]}>
-                    €{monthlyBudget.remaining.toFixed(2)}
+                    €{budgetData.remaining.toFixed(2)}
                   </Text>
                 </View>
                 <View style={styles.budgetStat}>
                   <Text style={styles.budgetStatLabel}>Total Budget</Text>
-                  <Text style={styles.budgetStatAmount}>€{monthlyBudget.total.toFixed(2)}</Text>
+                  <Text style={styles.budgetStatAmount}>€{budgetData.total.toFixed(2)}</Text>
                 </View>
               </View>
             </View>
@@ -211,16 +236,25 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  greeting: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginRight: 16,
+  },
+  settingsButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
+  },
   scrollView: {
     flex: 1,
     padding: 16,
     paddingBottom: 100,
-  },
-  monthlyCards: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 16,
   },
   balanceCard: {
     backgroundColor: '#fff',
@@ -235,17 +269,6 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
-  expenseCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#E91E63',
-  },
-  incomeCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#4CAF50',
-  },
-  halfCard: {
-    flex: 1,
-  },
   balanceLabel: {
     fontSize: 16,
     color: '#666',
@@ -257,13 +280,27 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     color: '#4CAF50',
   },
-  balanceChange: {
+  monthlyStats: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  balanceChangeText: {
-    marginLeft: 4,
+  monthlyStat: {
+    alignItems: 'center',
+  },
+  monthlyStatLabel: {
+    fontSize: 12,
     color: '#666',
+    marginBottom: 4,
+  },
+  monthlyStatAmount: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  statDivider: {
+    width: 1,
+    height: '100%',
+    backgroundColor: '#f0f0f0',
   },
   quickActions: {
     flexDirection: 'row',
